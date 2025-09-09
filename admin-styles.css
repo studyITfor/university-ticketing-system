@@ -1,0 +1,1752 @@
+/* Admin Panel Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background: #f5f7fa;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Login Screen */
+.login-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+.login-header h1 {
+    color: #333;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.login-header p {
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #333;
+}
+
+.form-group input {
+    padding: 0.75rem;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.login-error {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 0.75rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+/* Admin Dashboard */
+.admin-dashboard {
+    min-height: 100vh;
+    background: #f5f7fa;
+}
+
+.admin-header {
+    background: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 1rem 0;
+    margin-bottom: 2rem;
+}
+
+.admin-header .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.admin-title {
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Statistics Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.stat-card:nth-child(1) .stat-icon {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+.stat-card:nth-child(2) .stat-icon {
+    background: linear-gradient(135deg, #ffc107, #ff8f00);
+}
+
+.stat-card:nth-child(3) .stat-icon {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.stat-card:nth-child(4) .stat-icon {
+    background: linear-gradient(135deg, #17a2b8, #6f42c1);
+}
+
+.stat-content h3 {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 0.25rem;
+}
+
+.stat-content p {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Admin Controls */
+.admin-controls {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.control-group {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* Bookings Section */
+.bookings-section {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-header h2 {
+    color: #333;
+}
+
+.table-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-box i {
+    position: absolute;
+    left: 10px;
+    color: #666;
+}
+
+.search-box input {
+    padding: 0.5rem 0.5rem 0.5rem 2.5rem;
+    border: 2px solid #e9ecef;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    width: 250px;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+#statusFilter {
+    padding: 0.5rem 1rem;
+    border: 2px solid #e9ecef;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    background: white;
+}
+
+#statusFilter:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+
+.bookings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.bookings-table th {
+    background: #f8f9fa;
+    color: #333;
+    font-weight: 600;
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.bookings-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: middle;
+}
+
+.bookings-table tr:hover {
+    background: #f8f9fa;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-paid {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-cancelled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    text-decoration: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+}
+
+.btn-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-warning:hover {
+    background: #e0a800;
+    transform: translateY(-1px);
+}
+
+.btn-info {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
+/* Ticket Verification */
+.ticket-verification {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.verification-controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.verification-form {
+    margin: 1.5rem 0;
+}
+
+.input-group {
+    margin-bottom: 1rem;
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.input-wrapper input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.input-wrapper input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.verification-result {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 2px solid;
+    animation: slideIn 0.3s ease;
+}
+
+.verification-result.success {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.verification-result.error {
+    background: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+.verification-result.warning {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.result-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.result-icon {
+    font-size: 1.5rem;
+    margin-top: 0.25rem;
+}
+
+.result-text h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+}
+
+.result-text p {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.result-details {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+    font-size: 0.8rem;
+}
+
+.verification-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Hall Management */
+.hall-management {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Curved Hall Layout */
+.hall-layout-curved {
+    position: relative;
+    width: 100%;
+    height: 1200px;
+    background: #FFFFFF;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    overflow: hidden;
+    margin: 1rem 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.stage-area {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 15px 30px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.entry-area {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    background: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.seating-section {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+}
+
+.left-section {
+    left: 0;
+}
+
+.right-section {
+    right: 0;
+}
+
+.table-preview-curved {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.table-number-curved {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: bold;
+    z-index: 5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.table-circle-curved {
+    width: 70px;
+    height: 70px;
+    background: #f8f9fa;
+    border: 3px solid #dee2e6;
+    border-radius: 50%;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.table-circle-curved:hover {
+    background: #e9ecef;
+    border-color: #667eea;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.seats-container-curved {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.seat-curved {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid;
+    z-index: 3;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.seat-curved:hover {
+    transform: scale(1.3);
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Seat color coding for curved layout */
+.seat-curved.available {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.seat-curved.pending {
+    background: #FFD700;
+    color: #212529;
+    border-color: #FFD700;
+}
+
+.seat-curved.booked {
+    background: #FF4C4C;
+    color: white;
+    border-color: #FF4C4C;
+}
+
+.seat-curved.reserved {
+    background: #FF4C4C;
+    color: white;
+    border-color: #FF4C4C;
+}
+
+.seat-curved.prebooked {
+    background: #FFD700;
+    color: #212529;
+    border-color: #FFD700;
+}
+
+.hall-controls {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    background: #f8f9fa;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    border: 2px solid #e9ecef;
+}
+
+.zoom-controls button {
+    padding: 0.5rem;
+    border: none;
+    background: #667eea;
+    color: white;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.zoom-controls button:hover {
+    background: #5a6fd8;
+    transform: scale(1.1);
+}
+
+.zoom-controls button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.zoom-level {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #333;
+    min-width: 60px;
+    text-align: center;
+}
+
+.hall-preview {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    background: #f8f9fa;
+    min-height: 400px;
+    overflow: auto;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.stage-preview {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    text-align: center;
+    justify-content: center;
+    max-width: 150px;
+}
+
+.hall-layout-preview {
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tables-grid-preview {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1.5rem;
+    padding: 2rem;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.table-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.table-number-preview {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.8rem;
+    background: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    z-index: 2;
+    border: 2px solid #e9ecef;
+}
+
+.table-circle-preview {
+    width: 80px;
+    height: 80px;
+    border: 3px solid #e9ecef;
+    border-radius: 50%;
+    background: white;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.table-circle-preview:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    border-color: #667eea;
+}
+
+.seats-container-preview {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.seat-preview {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    pointer-events: auto;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.seat-preview:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Updated color coding to match student interface */
+.seat-preview.available {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.seat-preview.pending {
+    background: #FFD700;
+    color: #212529;
+    border-color: #FFD700;
+}
+
+.seat-preview.booked {
+    background: #FF4C4C;
+    color: white;
+    border-color: #FF4C4C;
+}
+
+.seat-preview.reserved {
+    background: #FF4C4C;
+    color: white;
+    border-color: #FF4C4C;
+}
+
+.seat-preview.prebooked {
+    background: #FFD700;
+    color: #212529;
+    border-color: #FFD700;
+}
+
+/* Zoom functionality */
+.hall-preview.zoom-50 { transform: scale(0.5); }
+.hall-preview.zoom-75 { transform: scale(0.75); }
+.hall-preview.zoom-100 { transform: scale(1); }
+.hall-preview.zoom-125 { transform: scale(1.25); }
+.hall-preview.zoom-150 { transform: scale(1.5); }
+.hall-preview.zoom-200 { transform: scale(2); }
+
+/* Ensure seat numbers remain readable when zoomed */
+.hall-preview.zoom-50 .seat-preview { font-size: 0.6rem; }
+.hall-preview.zoom-75 .seat-preview { font-size: 0.7rem; }
+.hall-preview.zoom-100 .seat-preview { font-size: 0.5rem; }
+.hall-preview.zoom-125 .seat-preview { font-size: 0.6rem; }
+.hall-preview.zoom-150 .seat-preview { font-size: 0.7rem; }
+.hall-preview.zoom-200 .seat-preview { font-size: 0.8rem; }
+
+.hall-legend {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.hall-legend .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.hall-legend .seat-sample {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid;
+}
+
+/* Updated legend colors to match seat colors */
+.hall-legend .seat-sample.available {
+    background: #4CAF50;
+    border-color: #4CAF50;
+}
+
+.hall-legend .seat-sample.pending {
+    background: #FFD700;
+    border-color: #FFD700;
+}
+
+.hall-legend .seat-sample.booked {
+    background: #FF4C4C;
+    border-color: #FF4C4C;
+}
+
+.hall-legend .seat-sample.reserved {
+    background: #FF4C4C;
+    border-color: #FF4C4C;
+}
+
+.hall-legend .seat-sample.prebooked {
+    background: #FFD700;
+    border-color: #FFD700;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.modal-header h3 {
+    color: #333;
+    font-size: 1.5rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+    background: #f8f9fa;
+    color: #333;
+}
+
+/* Booking Details */
+.booking-details {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.booking-details h4 {
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+.booking-details .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.booking-details .detail-row:last-child {
+    border-bottom: none;
+}
+
+.booking-details .label {
+    font-weight: 600;
+    color: #666;
+}
+
+.booking-details .value {
+    color: #333;
+}
+
+/* Payment Actions */
+.payment-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Ticket Styles */
+.ticket-content {
+    max-width: 700px;
+}
+
+.ticket {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.ticket-header {
+    text-align: center;
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ticket-header h2 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.ticket-body {
+    display: flex;
+    padding: 2rem;
+    gap: 2rem;
+    background: white;
+    color: #333;
+}
+
+.ticket-info {
+    flex: 1;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.label {
+    font-weight: 600;
+    color: #666;
+}
+
+.value {
+    color: #333;
+    font-weight: 500;
+}
+
+.qr-code {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.qr-note {
+    font-size: 0.8rem;
+    color: #666;
+    text-align: center;
+}
+
+.ticket-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .table-controls {
+        width: 100%;
+        justify-content: stretch;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+    
+    .control-group {
+        flex-direction: column;
+    }
+    
+    .bookings-table {
+        font-size: 0.8rem;
+    }
+    
+    .bookings-table th,
+    .bookings-table td {
+        padding: 0.5rem;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .ticket-body {
+        flex-direction: column;
+    }
+    
+    .ticket-actions {
+        flex-direction: column;
+    }
+    
+    .payment-actions {
+        flex-direction: column;
+    }
+    
+    /* Mobile hall controls */
+    .hall-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .zoom-controls {
+        margin-left: 0;
+        margin-top: 1rem;
+        justify-content: center;
+    }
+    
+    /* Mobile seat map adjustments */
+    .tables-grid-preview {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .table-circle-preview {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .seat-preview {
+        width: 14px;
+        height: 14px;
+        font-size: 0.4rem;
+    }
+    
+    .hall-legend {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+    }
+    
+    /* Mobile ticket verification */
+    .verification-form {
+        margin: 1rem 0;
+    }
+    
+    .input-wrapper {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .input-wrapper input {
+        width: 100%;
+    }
+    
+    .verification-stats {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .stat-item {
+        flex-direction: row;
+        justify-content: space-between;
+        text-align: left;
+    }
+    
+    .result-content {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    /* Mobile curved layout */
+    .hall-layout-curved {
+        height: 800px;
+    }
+    
+    .table-preview-curved {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .table-circle-curved {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .seat-curved {
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
+    }
+    
+    .table-number-curved {
+        width: 26px;
+        height: 26px;
+        font-size: 0.85rem;
+        top: -28px;
+    }
+    
+    .stage-area {
+        padding: 12px 25px;
+        font-size: 0.9rem;
+    }
+    
+    .entry-area {
+        padding: 8px 18px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        padding: 1rem;
+    }
+    
+    /* Extra small mobile curved layout */
+    .hall-layout-curved {
+        height: 600px;
+    }
+    
+    .table-preview-curved {
+        width: 70px;
+        height: 70px;
+    }
+    
+    .table-circle-curved {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .seat-curved {
+        width: 18px;
+        height: 18px;
+        font-size: 0.65rem;
+    }
+    
+    .table-number-curved {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+        top: -25px;
+    }
+    
+    .stage-area {
+        padding: 10px 20px;
+        font-size: 0.8rem;
+    }
+    
+    .entry-area {
+        padding: 6px 15px;
+        font-size: 0.75rem;
+    }
+    
+    .login-card {
+        padding: 1.5rem;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 1rem;
+        padding: 1.5rem;
+    }
+    
+    .bookings-table {
+        font-size: 0.7rem;
+    }
+    
+    .bookings-table th,
+    .bookings-table td {
+        padding: 0.25rem;
+    }
+}
+
+/* Seat Selection Interface Styles */
+.seat-selection-interface {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 2px solid #dee2e6;
+}
+
+.seat-selection-interface h3 {
+    margin: 0 0 20px 0;
+    color: #495057;
+    font-size: 1.1rem;
+}
+
+.selection-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.selection-input {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selection-input label {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.selection-input input {
+    padding: 10px;
+    border: 2px solid #ced4da;
+    border-radius: 5px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+}
+
+.selection-input input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.selection-input button {
+    align-self: flex-start;
+    padding: 8px 16px;
+    font-size: 12px;
+}
+
+.selected-seats-display {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selected-seats-display label {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.selected-seats-list {
+    min-height: 100px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 2px solid #ced4da;
+    border-radius: 5px;
+    padding: 10px;
+    background: white;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.selected-seats-list .no-seats {
+    color: #6c757d;
+    font-style: italic;
+    align-self: center;
+    width: 100%;
+    text-align: center;
+}
+
+.seat-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.seat-tag .remove-seat {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    transition: background-color 0.2s ease;
+}
+
+.seat-tag .remove-seat:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.selection-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+/* Pre-booked seat styling */
+.seat.prebooked {
+    background: #6f42c1 !important;
+    color: white !important;
+    border: 2px solid #5a32a3 !important;
+    position: relative;
+}
+
+.seat.prebooked::after {
+    content: "P";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    font-size: 10px;
+}
+
+/* Pre-booked Seats Section Styles */
+.prebooked-seats-section {
+    margin: 30px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 2px solid #6f42c1;
+}
+
+.prebooked-seats-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.prebooked-seats-section h2 {
+    color: #6f42c1;
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.prebooked-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.prebooked-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.prebooked-stats .stat-card {
+    background: linear-gradient(135deg, #e2d9f3, #d1c4e9);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    border-left: 4px solid #6f42c1;
+}
+
+.prebooked-stats .stat-value {
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #6f42c1;
+}
+
+.prebooked-stats .stat-label {
+    color: #666;
+    margin-top: 5px;
+    font-size: 12px;
+}
+
+.prebooked-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.prebooked-table th {
+    background: #6f42c1;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.prebooked-table td {
+    padding: 12px;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 14px;
+}
+
+.prebooked-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.prebooked-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.seat-cell {
+    font-weight: bold;
+    color: #6f42c1;
+}
+
+.prebook-type {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.prebook-type.manual {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.prebook-type.random {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.prebook-type.bulk {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.date-cell {
+    color: #666;
+    font-size: 13px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.action-buttons button {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-buttons .btn-release {
+    background: #dc3545;
+    color: white;
+}
+
+.action-buttons .btn-release:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+}
+
+.action-buttons .btn-info {
+    background: #17a2b8;
+    color: white;
+}
+
+.action-buttons .btn-info:hover {
+    background: #138496;
+    transform: translateY(-1px);
+}
+
+/* Responsive design for seat selection */
+@media (max-width: 768px) {
+    .selection-controls {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .selection-actions {
+        justify-content: center;
+    }
+    
+    .selected-seats-list {
+        min-height: 80px;
+        max-height: 150px;
+    }
+    
+    .prebooked-seats-section .section-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .prebooked-controls {
+        justify-content: center;
+    }
+    
+    .prebooked-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .prebooked-table {
+        font-size: 12px;
+    }
+    
+    .prebooked-table th,
+    .prebooked-table td {
+        padding: 8px;
+    }
+}

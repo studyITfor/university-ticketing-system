@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOLDENMIDDLE - Просмотр мест (Студенты)</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        /* Overlay to block all interactions */
+        .read-only-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 9999;
+            pointer-events: none;
+        }
+        
+        .read-only-overlay.active {
+            pointer-events: all;
+            background: rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Disable all interactive elements */
+        .seat {
+            pointer-events: none !important;
+            cursor: default !important;
+        }
+        
+        .seat:hover {
+            transform: none !important;
+        }
+        
+        /* Hide booking form and interactive elements */
+        .booking-form,
+        .booking-summary,
+        .test-panel,
+        .test-toggle {
+            display: none !important;
+        }
+        
+        /* Student-specific header */
+        .student-header {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .student-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        
+        .student-header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        /* Connection status for students */
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+        
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #dc3545;
+        }
+        
+        .connection-status.authenticating {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+        
+        /* Seat legend for students */
+        .seat-legend {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 2px solid #dee2e6;
+        }
+        
+        .seat-legend h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        
+        .seat-sample {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .seat-sample.available { background: #4CAF50; color: white; }
+        .seat-sample.pending { background: #FFD700; color: #212529; }
+        .seat-sample.reserved { background: #FF4C4C; color: white; }
+        
+        /* Real-time update indicator */
+        .update-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        
+        .update-indicator.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- Read-only overlay to block interactions -->
+    <div class="read-only-overlay" id="readOnlyOverlay"></div>
+    
+    <!-- Connection status indicator -->
+    <div class="connection-status disconnected" id="connectionStatus">
+        🔌 Подключение...
+    </div>
+    
+    <!-- Real-time update indicator -->
+    <div class="update-indicator" id="updateIndicator">
+        📡 Обновление данных...
+    </div>
+    
+    <!-- Student-specific header -->
+    <div class="student-header">
+        <h2><i class="fas fa-eye"></i> Режим просмотра для студентов</h2>
+        <p>Вы можете просматривать доступность мест в режиме реального времени</p>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">
+                <i class="fas fa-ticket-alt"></i>
+                GOLDENMIDDLE
+            </h1>
+            <div class="header-info">
+                <span class="event-date">26 октября 2025</span>
+                <span class="event-time">18:00</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Event Info Section -->
+        <section class="event-info">
+            <div class="container">
+                <div class="event-details">
+                    <h2 class="event-title">КГМА - Университетское мероприятие "GOLDENMIDDLE"</h2>
+                    <div class="event-meta">
+                        <div class="meta-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>26 октября 2025</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-clock"></i>
+                            <span>18:00</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>Асман</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Seat Selection Section (Read-only) -->
+        <section class="seat-selection">
+            <div class="container">
+                <h2 class="section-title">Карта мест (Только просмотр)</h2>
+                <div class="seat-map" id="seatMap">
+                    <!-- Seats will be generated here -->
+                </div>
+                
+                <!-- Seat legend for students -->
+                <div class="seat-legend">
+                    <h3><i class="fas fa-info-circle"></i> Обозначения мест</h3>
+                    <div class="legend-item">
+                        <div class="seat-sample available">A</div>
+                        <span><strong>Доступно</strong> - Место свободно для бронирования</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="seat-sample pending">P</div>
+                        <span><strong>Ожидает оплаты</strong> - Место забронировано, ожидает подтверждения</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="seat-sample reserved">R</div>
+                        <span><strong>Занято</strong> - Место забронировано и подтверждено</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        class StudentViewSystem {
+            constructor() {
+                this.socket = null;
+                this.authenticated = false;
+                this.userRole = 'student';
+                this.socketStatus = {
+                    connected: false,
+                    lastUpdate: null,
+                    totalUpdates: 0
+                };
+                
+                this.init();
+            }
+
+            init() {
+                console.log('🎓 Initializing student view system...');
+                this.initializeSocket();
+                this.generateSeatMap();
+                this.setupEventListeners();
+            }
+
+            initializeSocket() {
+                console.log('🔌 Connecting to server as student...');
+                
+                this.socket = io('http://localhost:3000', {
+                    transports: ['websocket', 'polling'],
+                    timeout: 20000,
+                    forceNew: true,
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000
+                });
+
+                // Connection event handlers
+                this.socket.on('connect', () => {
+                    console.log('✅ Connected to server');
+                    this.socketStatus.connected = true;
+                    this.updateConnectionStatus('connected');
+                    
+                    // Authenticate as student
+                    this.authenticateAsStudent();
+                });
+
+                this.socket.on('disconnect', (reason) => {
+                    console.log('❌ Disconnected from server:', reason);
+                    this.socketStatus.connected = false;
+                    this.updateConnectionStatus('disconnected');
+                });
+
+                this.socket.on('authSuccess', (data) => {
+                    console.log('✅ Student authentication successful:', data);
+                    this.authenticated = true;
+                    this.userRole = data.role;
+                    this.updateConnectionStatus('connected');
+                });
+
+                this.socket.on('authError', (error) => {
+                    console.error('❌ Authentication failed:', error);
+                    this.updateConnectionStatus('disconnected');
+                });
+
+                this.socket.on('seatUpdate', (data) => {
+                    console.log('📡 Received seat update:', data);
+                    this.socketStatus.totalUpdates++;
+                    this.socketStatus.lastUpdate = new Date().toISOString();
+                    this.handleSeatUpdate(data);
+                    this.showUpdateIndicator();
+                });
+
+                this.socket.on('seatBulkUpdate', (data) => {
+                    console.log('📡 Received bulk seat update:', data);
+                    this.socketStatus.totalUpdates++;
+                    this.socketStatus.lastUpdate = new Date().toISOString();
+                    this.handleBulkSeatUpdate(data);
+                    this.showBulkUpdateIndicator();
+                });
+
+                this.socket.on('error', (error) => {
+                    console.warn('⚠️ Server error:', error.message);
+                });
+
+                // Block any attempt to emit modification events
+                this.blockModificationEvents();
+            }
+
+            authenticateAsStudent() {
+                console.log('🔐 Authenticating as student...');
+                this.socket.emit('authenticate', { role: 'student' });
+            }
+
+            blockModificationEvents() {
+                // Override socket.emit to block modification events
+                const originalEmit = this.socket.emit.bind(this.socket);
+                
+                this.socket.emit = (event, data) => {
+                    const forbiddenEvents = ['modifySeat', 'createBooking', 'deleteBooking', 'confirmPayment'];
+                    
+                    if (forbiddenEvents.includes(event)) {
+                        console.warn('🚫 Blocked attempt to emit forbidden event:', event);
+                        this.showWarning('Действие запрещено: только администраторы могут изменять данные');
+                        return;
+                    }
+                    
+                    originalEmit(event, data);
+                };
+            }
+
+            generateSeatMap() {
+                const seatMap = document.getElementById('seatMap');
+                seatMap.innerHTML = '';
+
+                // Generate 36 tables with 14 seats each
+                for (let table = 1; table <= 36; table++) {
+                    const tableDiv = document.createElement('div');
+                    tableDiv.className = 'table';
+                    tableDiv.innerHTML = `<div class="table-number">Стол ${table}</div>`;
+
+                    for (let seat = 1; seat <= 14; seat++) {
+                        const seatId = `${table}-${seat}`;
+                        const seatElement = document.createElement('div');
+                        seatElement.className = 'seat available';
+                        seatElement.dataset.seatId = seatId;
+                        seatElement.textContent = seat;
+                        
+                        // Disable all interactions
+                        seatElement.style.pointerEvents = 'none';
+                        seatElement.style.cursor = 'default';
+                        
+                        tableDiv.appendChild(seatElement);
+                    }
+
+                    seatMap.appendChild(tableDiv);
+                }
+            }
+
+            handleSeatUpdate(data) {
+                if (data.success && data.seatStatuses) {
+                    console.log('🔄 Updating seat display...');
+                    
+                    Object.entries(data.seatStatuses).forEach(([seatId, status]) => {
+                        this.updateSeatStatus(seatId, status);
+                    });
+                    
+                    console.log('✅ Seat display updated');
+                }
+            }
+
+            handleBulkSeatUpdate(data) {
+                if (data.success && data.seatStatuses) {
+                    console.log('🔄 Processing bulk seat update...');
+                    console.log(`📊 Total seats to update: ${Object.keys(data.seatStatuses).length}`);
+                    console.log(`📊 Update type: ${data.type || 'bulk_update'}`);
+                    console.log(`📊 Message: ${data.message || 'Bulk update received'}`);
+                    
+                    // Update all seats at once
+                    Object.entries(data.seatStatuses).forEach(([seatId, status]) => {
+                        this.updateSeatStatus(seatId, status);
+                    });
+                    
+                    console.log('✅ Bulk seat update completed');
+                    console.log(`📊 Status distribution:`, data.statusCounts);
+                }
+            }
+
+            updateSeatStatus(seatId, status) {
+                const seatElement = document.querySelector(`[data-seat-id="${seatId}"]`);
+                if (!seatElement) return;
+
+                // Remove all status classes
+                seatElement.className = 'seat';
+                
+                // Apply new status
+                seatElement.classList.add(status);
+
+                // Apply colors
+                if (status === 'reserved' || status === 'confirmed' || status === 'paid') {
+                    seatElement.style.backgroundColor = '#FF4C4C';
+                    seatElement.style.borderColor = '#FF4C4C';
+                    seatElement.style.color = 'white';
+                } else if (status === 'pending') {
+                    seatElement.style.backgroundColor = '#FFD700';
+                    seatElement.style.borderColor = '#FFD700';
+                    seatElement.style.color = '#212529';
+                } else if (status === 'prebooked') {
+                    seatElement.style.backgroundColor = '#FF4C4C';
+                    seatElement.style.borderColor = '#FF4C4C';
+                    seatElement.style.color = 'white';
+                    seatElement.title = 'Booked (Paid) - Not available for booking';
+                } else if (status === 'available' || status === 'active') {
+                    seatElement.style.backgroundColor = '#4CAF50';
+                    seatElement.style.borderColor = '#4CAF50';
+                    seatElement.style.color = 'white';
+                }
+            }
+
+            updateConnectionStatus(status) {
+                const statusElement = document.getElementById('connectionStatus');
+                
+                switch (status) {
+                    case 'connected':
+                        statusElement.className = 'connection-status connected';
+                        statusElement.innerHTML = '🟢 Подключено (Студент)';
+                        break;
+                    case 'disconnected':
+                        statusElement.className = 'connection-status disconnected';
+                        statusElement.innerHTML = '🔴 Отключено';
+                        break;
+                    case 'authenticating':
+                        statusElement.className = 'connection-status authenticating';
+                        statusElement.innerHTML = '🟡 Аутентификация...';
+                        break;
+                }
+            }
+
+            showUpdateIndicator() {
+                const indicator = document.getElementById('updateIndicator');
+                indicator.classList.add('show');
+                
+                setTimeout(() => {
+                    indicator.classList.remove('show');
+                }, 3000);
+            }
+
+            showBulkUpdateIndicator() {
+                const indicator = document.getElementById('updateIndicator');
+                indicator.textContent = '🔄 Обновление всех мест...';
+                indicator.classList.add('show');
+                
+                setTimeout(() => {
+                    indicator.textContent = '📡 Обновление данных...';
+                    indicator.classList.remove('show');
+                }, 5000);
+            }
+
+            showWarning(message) {
+                // Create a temporary warning message
+                const warning = document.createElement('div');
+                warning.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: #dc3545;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    font-weight: bold;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                `;
+                warning.textContent = message;
+                
+                document.body.appendChild(warning);
+                
+                setTimeout(() => {
+                    document.body.removeChild(warning);
+                }, 3000);
+            }
+
+            setupEventListeners() {
+                // Block all form submissions
+                document.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.showWarning('Функция бронирования недоступна в режиме просмотра');
+                });
+
+                // Block all clicks on interactive elements
+                document.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('seat') || 
+                        e.target.closest('.booking-form') ||
+                        e.target.closest('.booking-summary')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.showWarning('Изменение данных запрещено в режиме просмотра');
+                    }
+                });
+
+                // Block keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        this.showWarning('Горячие клавиши отключены в режиме просмотра');
+                    }
+                });
+            }
+        }
+
+        // Initialize student view when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new StudentViewSystem();
+        });
+    </script>
+</body>
+</html>

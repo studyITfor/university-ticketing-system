@@ -1,0 +1,302 @@
+{
+  "info": {
+    "name": "University Ticketing System API",
+    "description": "Complete API testing collection for the university ticketing system with real-time WebSocket functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System Health",
+      "item": [
+        {
+          "name": "Get Socket.IO Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/test/socket-info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test", "socket-info"]
+            },
+            "description": "Get information about Socket.IO connections"
+          },
+          "response": []
+        },
+        {
+          "name": "Test Seat Update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/test/emit-seat-update",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "test", "emit-seat-update"]
+            },
+            "description": "Manually trigger a seat update event"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Seat Management",
+      "item": [
+        {
+          "name": "Get All Seat Statuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/seat-statuses",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "seat-statuses"]
+            },
+            "description": "Get current status of all seats"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Booking Management",
+      "item": [
+        {
+          "name": "Create New Booking",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"John Doe\",\n  \"email\": \"john@university.edu\",\n  \"phone\": \"+1234567890\",\n  \"ticketType\": \"standard\",\n  \"ticketCount\": 2,\n  \"selectedSeats\": [\"1-1\", \"1-2\"],\n  \"totalPrice\": 118\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/create-booking",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "create-booking"]
+            },
+            "description": "Create a new booking for selected seats"
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"paymentMethod\": \"card\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/confirm-payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "confirm-payment"]
+            },
+            "description": "Confirm payment for a booking"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Booking",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/delete-booking/{{bookingId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "delete-booking", "{{bookingId}}"]
+            },
+            "description": "Delete a booking by ID"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin Functions",
+      "item": [
+        {
+          "name": "Admin Release All Seats",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminPassword\": \"admin123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/release-all-seats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "release-all-seats"]
+            },
+            "description": "Admin function to release all seats"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Pre-book Seats (Manual)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminPassword\": \"admin123\",\n  \"seatIds\": [\"2-1\", \"2-2\", \"2-3\"],\n  \"prebookType\": \"manual\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/prebook-seats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "prebook-seats"]
+            },
+            "description": "Admin function to pre-book specific seats manually"
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Pre-book Seats (Random)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminPassword\": \"admin123\",\n  \"count\": 5,\n  \"prebookType\": \"random\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/prebook-seats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "prebook-seats"]
+            },
+            "description": "Admin function to pre-book random seats"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "WebSocket Testing",
+      "item": [
+        {
+          "name": "Socket.IO Connection Test",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/socket.io/",
+              "host": ["{{baseUrl}}"],
+              "path": ["socket.io", ""]
+            },
+            "description": "Test Socket.IO endpoint availability"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://your-app-name.railway.app",
+      "disabled": false,
+      "description": "Base URL for the deployed application"
+    },
+    {
+      "key": "bookingId",
+      "value": "BOOKING_ID_FROM_CREATE_RESPONSE",
+      "disabled": false,
+      "description": "Booking ID obtained from create booking response"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set base URL if not already set",
+          "if (!pm.variables.get('baseUrl')) {",
+          "    pm.variables.set('baseUrl', 'https://your-app-name.railway.app');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Log response for debugging",
+          "console.log('Response Status:', pm.response.status);",
+          "console.log('Response Body:', pm.response.text());",
+          "",
+          "// Basic response validation",
+          "pm.test('Status code is successful', function () {",
+          "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+          "});",
+          "",
+          "// For booking creation, extract booking ID",
+          "if (pm.info.requestName === 'Create New Booking' && pm.response.code === 201) {",
+          "    const responseJson = pm.response.json();",
+          "    if (responseJson.bookingId) {",
+          "        pm.variables.set('bookingId', responseJson.bookingId);",
+          "        console.log('Booking ID saved:', responseJson.bookingId);",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ]
+}
