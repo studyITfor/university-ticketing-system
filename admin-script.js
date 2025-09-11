@@ -1190,7 +1190,7 @@ class AdminPanel {
         zoomOutBtn.disabled = this.zoomLevel <= 50;
         
         // Apply smooth zoom to curved layout
-        const curvedLayout = hallPreview.querySelector('.hall-layout-curved');
+        const curvedLayout = this.hall ? this.hall.querySelector('.hall-layout-curved') : null;
         if (curvedLayout) {
             const scale = this.zoomLevel / 100;
             // Update our pan/zoom state
@@ -1205,7 +1205,9 @@ class AdminPanel {
             
             // Adjust container height based on zoom level
             const containerHeight = Math.max(800, 1200 * scale);
-            hallPreview.style.height = `${containerHeight}px`;
+            if (this.hall) {
+                this.hall.style.height = `${containerHeight}px`;
+            }
         }
     }
 
