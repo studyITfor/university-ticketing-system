@@ -21,6 +21,14 @@ class StudentTicketingSystem {
         this.pinchOriginX = undefined;
         this.pinchOriginY = undefined;
         this.recentlyPinched = false;
+        
+        // Pan/drag properties
+        this.isPanning = false;
+        this.panStartX = 0;
+        this.panStartY = 0;
+        this.lastPanX = 0;
+        this.lastPanY = 0;
+        this.recentlyPanned = false;
         this.currentBookingSeat = null;
         this.tempBookingData = null;
         this.modalReadyForSubmission = false; // Store temporary booking data before payment
@@ -89,7 +97,7 @@ class StudentTicketingSystem {
             }
         });
         
-        // Touch events for mobile - unified pinch-to-zoom and seat selection
+        // Touch events for mobile - unified pinch-to-zoom, pan/drag, and seat selection
         hallContent.addEventListener('touchstart', (e) => {
             this.touches = Array.from(e.touches);
             
@@ -107,6 +115,7 @@ class StudentTicketingSystem {
             // Handle pinch-to-zoom initialization
             if (this.touches.length === 2) {
                 this.isPinching = true;
+                this.isPanning = false;
                 this.recentlyPinched = false;
                 const { distance, midX, midY } = this.getDistanceAndMidpoint(this.touches);
                 this.lastDistance = distance;
@@ -119,6 +128,15 @@ class StudentTicketingSystem {
                 
                 console.log('📱 Pinch gesture started - distance:', distance, 'center:', midX, midY);
                 e.preventDefault(); // Prevent browser pinch zoom
+            } else if (this.touches.length === 1) {
+                // Single touch - prepare for potential pan/drag
+                this.isPanning = false;
+                this.panStartX = e.touches[0].clientX;
+                this.panStartY = e.touches[0].clientY;
+                this.lastPanX = this.currentPanX;
+                this.lastPanY = this.currentPanY;
+                
+                console.log('📱 Single touch start - preparing for pan/drag');
             }
         }, { passive: false });
         
@@ -148,6 +166,44 @@ class StudentTicketingSystem {
                 this.lastDistance = distance;
                 this.lastPinchCenter = { x: midX, y: midY };
                 e.preventDefault(); // Prevent browser pinch zoom
+            } else if (this.touches.length === 1 && !this.isPinching) {
+                // Handle single-finger pan/drag
+                const touch = this.touches[0];
+                const deltaX = touch.clientX - this.panStartX;
+                const deltaY = touch.clientY - this.panStartY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                
+                // Start panning if movement exceeds threshold
+                if (distance > this.dragThreshold && !this.isPanning) {
+                    this.isPanning = true;
+                    this.recentlyPanned = true;
+                    console.log('📱 Pan gesture started - distance:', distance);
+                }
+                
+                if (this.isPanning) {
+                    // Calculate new pan position
+                    const newPanX = this.lastPanX + deltaX;
+                    const newPanY = this.lastPanY + deltaY;
+                    
+                    // Apply boundaries to prevent panning out of view
+                    const hallLayout = document.getElementById('hallLayout');
+                    const hallContent = document.getElementById('hallContent');
+                    const layoutRect = hallLayout.getBoundingClientRect();
+                    const contentRect = hallContent.getBoundingClientRect();
+                    
+                    // Calculate boundaries based on zoom level
+                    const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
+                    const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
+                    
+                    this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, newPanX));
+                    this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, newPanY));
+                    
+                    this.smoothUpdateTransform();
+                    
+                    console.log('📱 Pan move - deltaX:', deltaX, 'deltaY:', deltaY, 'currentPanX:', this.currentPanX, 'currentPanY:', this.currentPanY);
+                }
+                
+                e.preventDefault(); // Prevent scrolling
             }
         }, { passive: false });
         
@@ -164,7 +220,20 @@ class StudentTicketingSystem {
                 }, 300);
             }
             
-            // Check if this is a tap on a seat (not a drag or pinch)
+            // Reset pan state
+            if (this.touches.length === 0) {
+                this.isPanning = false;
+                this.recentlyPanned = true;
+                
+                // Reset recentlyPanned flag after cooldown
+                setTimeout(() => {
+                    this.recentlyPanned = false;
+                }, 300);
+                
+                console.log('📱 Touch ended - pan state reset');
+            }
+            
+            // Check if this is a tap on a seat (not a drag, pinch, or pan)
             if (e.target.classList.contains('seat') && this.touchedSeat === e.target) {
                 const touchDuration = Date.now() - this.touchStartTime;
                 const touchDistance = this.getTouchDistance(
@@ -172,8 +241,8 @@ class StudentTicketingSystem {
                     { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
                 );
                 
-                // Only handle as seat selection if it's a quick tap (not a drag or recent pinch)
-                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched) {
+                // Only handle as seat selection if it's a quick tap (not a drag, pinch, or pan)
+                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched && !this.recentlyPanned) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('📱 Mobile seat tap detected:', e.target);
@@ -755,6 +824,21 @@ class StudentTicketingSystem {
         
         hallContent.style.transformOrigin = `${originX}px ${originY}px`;
         hallContent.style.transform = `translate(${this.currentPanX}px, ${this.currentPanY}px) scale(${this.currentZoom})`;
+        
+        // Log transform values for debugging
+        console.log('📱 Transform updated - panX:', this.currentPanX, 'panY:', this.currentPanY, 'zoom:', this.currentZoom);
+    }
+
+    // Smooth pan update using requestAnimationFrame
+    smoothUpdateTransform() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        
+        this.animationFrameId = requestAnimationFrame(() => {
+            this.updateTransform();
+            this.animationFrameId = null;
+        });
     }
 
     startDrag(e) {
