@@ -51,6 +51,72 @@ const secureTicketSystem = new SecureTicketSystem(
     path.join(__dirname, 'secure-tickets-database.json')
 );
 
+// Function to emit seat updates to all connected clients
+function emitSeatUpdate() {
+    try {
+        // Get current seat statuses
+        const seatStatuses = {};
+        
+        // Initialize all seats as available (active) - using correct table count
+        for (let table = 1; table <= 36; table++) {
+            for (let seat = 1; seat <= 14; seat++) {
+                const seatId = `${table}-${seat}`;
+                seatStatuses[seatId] = 'active'; // default to available
+            }
+        }
+        
+        // Load bookings and update seat statuses
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
+        
+        if (fs.existsSync(bookingsPath)) {
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+        }
+        
+        // Update seat statuses based on bookings
+        Object.values(bookings).forEach(booking => {
+            if (booking.table && booking.seat && booking.status) {
+                const seatId = `${booking.table}-${booking.seat}`;
+                let status = 'active'; // default
+                
+                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
+                    status = 'reserved';
+                } else if (booking.status === 'pending') {
+                    status = 'pending';
+                } else if (booking.status === 'prebooked') {
+                    status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
+                }
+                
+                seatStatuses[seatId] = status;
+                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+            }
+        });
+        
+        // Count statuses for logging
+        const statusCounts = Object.values(seatStatuses).reduce((acc, status) => {
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {});
+        
+        // Emit to all connected clients
+        const updateData = {
+            success: true,
+            seatStatuses: seatStatuses,
+            timestamp: Date.now(),
+            totalSeats: Object.keys(seatStatuses).length,
+            statusCounts: statusCounts
+        };
+        
+        io.emit('seatUpdate', updateData);
+        
+        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
+        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
+        console.log(`📊 Status distribution:`, statusCounts);
+    } catch (error) {
+        console.error('Error emitting seat update:', error);
+    }
+}
+
 // Socket.IO connection handling with role-based access control
 io.on('connection', (socket) => {
     console.log('🔌 Client connected:', socket.id);
@@ -183,72 +249,6 @@ io.on('connection', (socket) => {
         socket.emit('pong', { timestamp: Date.now() });
     });
 });
-
-// Function to emit seat updates to all connected clients
-function emitSeatUpdate() {
-    try {
-        // Get current seat statuses
-        const seatStatuses = {};
-        
-        // Initialize all seats as available (active) - using correct table count
-        for (let table = 1; table <= 36; table++) {
-            for (let seat = 1; seat <= 14; seat++) {
-                const seatId = `${table}-${seat}`;
-                seatStatuses[seatId] = 'active'; // default to available
-            }
-        }
-        
-        // Load bookings and update seat statuses
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        // Update seat statuses based on bookings
-        Object.values(bookings).forEach(booking => {
-            if (booking.table && booking.seat && booking.status) {
-                const seatId = `${booking.table}-${booking.seat}`;
-                let status = 'active'; // default
-                
-                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
-                    status = 'reserved';
-                } else if (booking.status === 'pending') {
-                    status = 'pending';
-                } else if (booking.status === 'prebooked') {
-                    status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
-                }
-                
-                seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
-            }
-        });
-        
-        // Count statuses for logging
-        const statusCounts = Object.values(seatStatuses).reduce((acc, status) => {
-            acc[status] = (acc[status] || 0) + 1;
-            return acc;
-        }, {});
-        
-        // Emit to all connected clients
-        const updateData = {
-            success: true,
-            seatStatuses: seatStatuses,
-            timestamp: Date.now(),
-            totalSeats: Object.keys(seatStatuses).length,
-            statusCounts: statusCounts
-        };
-        
-        io.emit('seatUpdate', updateData);
-        
-        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
-        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
-        console.log(`📊 Status distribution:`, statusCounts);
-    } catch (error) {
-        console.error('Error emitting seat update:', error);
-    }
-}
 
 // Function to release all seats and emit bulk update
 function releaseAllSeats() {
@@ -773,9 +773,10 @@ app.post('/api/create-booking', async (req, res) => {
             bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
         }
         
-        // Check if seat is already booked
+        // Check if seat is already booked (only check for confirmed bookings)
         const existingBooking = Object.values(bookings).find(b => 
-            b.table == bookingData.table && b.seat == bookingData.seat && b.status !== 'cancelled'
+            b.table == bookingData.table && b.seat == bookingData.seat && 
+            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'Оплачен' || b.status === 'prebooked')
         );
         
         if (existingBooking) {

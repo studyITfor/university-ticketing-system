@@ -263,7 +263,7 @@
             initializeSocket() {
                 console.log('🔌 Connecting to server as student...');
                 
-                this.socket = io('http://localhost:3000', {
+                this.socket = io(window.location.origin, {
                     transports: ['websocket', 'polling'],
                     timeout: 20000,
                     forceNew: true,

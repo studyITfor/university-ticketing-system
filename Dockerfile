@@ -1,32 +1,59 @@
-# Use the Node official image
-# https://hub.docker.com/_/node
-FROM node:lts
+# Multi-stage build for optimized production image
+# Stage 1: Build dependencies
+FROM node:lts-alpine AS dependencies
 
-# Create and change to the app directory.
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app directory
 WORKDIR /app
 
-# Copy package files first for better Docker layer caching
+# Copy package files for dependency installation
 COPY package*.json ./
 
-# Install production dependencies only
-# Using npm install --omit=dev --frozen-lockfile for better compatibility with Railway
-RUN npm install --omit=dev --frozen-lockfile --no-audit --no-fund
+# Install production dependencies with optimizations
+RUN npm install --omit=dev --frozen-lockfile --no-audit --no-fund && \
+    npm cache clean --force
 
-# Copy local code to the container image
-COPY . ./
+# Stage 2: Production image
+FROM node:lts-alpine AS production
 
-# Create necessary directories
-RUN mkdir -p tickets
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependencies from build stage
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copy application code
+COPY --chown=nodejs:nodejs . .
+
+# Create necessary directories with proper permissions
+RUN mkdir -p tickets && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
 
 # Set production environment
 ENV NODE_ENV=production
+ENV PORT=3000
 
-# Expose the port the app runs on
+# Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/test/socket-info', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+# Health check with better error handling for Railway
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/api/test/socket-info', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
-# Serve the app
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
 CMD ["npm", "start"]

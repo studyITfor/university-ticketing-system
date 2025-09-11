@@ -15,9 +15,17 @@ class StudentTicketingSystem {
         this.isDragging = false;
         this.dragStart = { x: 0, y: 0 };
         this.currentBookingSeat = null;
+        this.tempBookingData = null;
+        this.modalReadyForSubmission = false; // Store temporary booking data before payment
         this.realTimeUpdateInterval = null;
         this.lastUpdateTime = Date.now();
         this.socket = null;
+        
+        // Touch/pinch zoom properties
+        this.touches = [];
+        this.lastTouchDistance = 0;
+        this.isPinching = false;
+        this.lastPinchCenter = { x: 0, y: 0 };
         
         this.init();
     }
@@ -30,6 +38,11 @@ class StudentTicketingSystem {
         this.syncExistingBookings();
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
+        
+        // Test validation logic on startup (for debugging)
+        setTimeout(() => {
+            this.testValidation();
+        }, 2000);
     }
 
     setupEventListeners() {
@@ -44,11 +57,25 @@ class StudentTicketingSystem {
         hallLayout.addEventListener('mousemove', (e) => this.drag(e));
         hallLayout.addEventListener('mouseup', () => this.endDrag());
         hallLayout.addEventListener('wheel', (e) => this.handleWheel(e));
+        
+        // Touch events for mobile pinch-to-zoom
+        hallLayout.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+        hallLayout.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+        hallLayout.addEventListener('touchend', (e) => this.handleTouchEnd(e));
 
-        // Seat selection
+        // Seat selection - both click and touch events
         document.getElementById('hallContent').addEventListener('click', (e) => {
             if (e.target.classList.contains('seat')) {
-                this.handleSeatClick(e.target);
+                this.handleSeatClick(e.target, e);
+            }
+        });
+        
+        // Touch support for seat selection on mobile
+        document.getElementById('hallContent').addEventListener('touchend', (e) => {
+            // Only handle seat selection if not pinching/panning
+            if (!this.isPinching && !this.isDragging && e.target.classList.contains('seat')) {
+                e.preventDefault();
+                this.handleSeatClick(e.target, e);
             }
         });
 
@@ -79,7 +106,52 @@ class StudentTicketingSystem {
         // Booking form
         document.getElementById('bookingForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            this.handleBookingSubmission();
+            console.log('🔍 DEBUG: Form submit event triggered by:', e.submitter || 'unknown');
+            console.log('🔍 DEBUG: Event target:', e.target);
+            console.log('🔍 DEBUG: Event type:', e.type);
+            console.log('🔍 DEBUG: Current booking seat:', this.currentBookingSeat);
+            
+            // Prevent submission if no seat is selected (shouldn't happen, but safety check)
+            if (!this.currentBookingSeat) {
+                console.log('⚠️ DEBUG: No seat selected for booking!');
+                alert('DEBUG: No seat selected. Please click on a seat first.');
+                return;
+            }
+            
+            // Prevent premature submission (before user has time to fill form)
+            if (!this.modalReadyForSubmission) {
+                console.log('⚠️ DEBUG: Form submitted too early - modal not ready yet!');
+                alert('DEBUG: Please wait a moment for the form to load, then fill it out before submitting.');
+                return;
+            }
+            
+            // Check if form has any values before processing
+            const form = document.getElementById('bookingForm');
+            const formData = new FormData(form);
+            let hasValues = false;
+            const fieldValues = {};
+            
+            for (let [key, value] of formData.entries()) {
+                fieldValues[key] = value;
+                if (value && value.trim()) {
+                    hasValues = true;
+                }
+            }
+            
+            console.log('🔍 DEBUG: Form field values:', fieldValues);
+            console.log('🔍 DEBUG: Has values:', hasValues);
+            
+            if (!hasValues) {
+                console.log('⚠️ DEBUG: Form submitted with no values - this might be the issue!');
+                console.log('🔍 DEBUG: This suggests the form is being submitted before user fills it out');
+                alert('DEBUG: Form was submitted with empty values. Please fill out the form first, then click "Забронировать место".');
+                return;
+            }
+            
+            // Add a small delay to ensure form data is captured
+            setTimeout(() => {
+                this.handleBookingSubmission();
+            }, 100);
         });
 
         // Payment confirmation
@@ -159,32 +231,6 @@ class StudentTicketingSystem {
         return tableDiv;
     }
 
-    handleSeatClick(seatElement) {
-        const seatId = seatElement.dataset.seatId;
-        
-        // Check if seat is clickable based on current status
-        if (seatElement.classList.contains('reserved') || 
-            seatElement.classList.contains('booked') || 
-            seatElement.classList.contains('prebooked') || 
-            seatElement.classList.contains('pending')) {
-            return; // Can't select reserved, booked, prebooked, or pending seats
-        }
-
-        if (seatElement.classList.contains('selected')) {
-            // Deselect seat
-            seatElement.classList.remove('selected');
-            seatElement.classList.add('available');
-            this.selectedSeats.delete(seatId);
-        } else {
-            // Select seat and show booking form
-            seatElement.classList.remove('available');
-            seatElement.classList.add('selected');
-            this.selectedSeats.add(seatId);
-            this.showBookingModal(seatId);
-        }
-
-        this.updateBookingSummary();
-    }
 
     updateBookingSummary() {
         const count = this.selectedSeats.size;
@@ -203,11 +249,46 @@ class StudentTicketingSystem {
         // Store current seat for booking
         this.currentBookingSeat = seatId;
         
+        console.log('🔍 DEBUG: Opening booking modal for seat:', seatId);
+        
+        // Reset form and prepare for user input
+        const form = document.getElementById('bookingForm');
+        form.reset();
+        this.modalReadyForSubmission = false;
+        
         this.showModal('bookingModal');
+        
+        // Allow submission after a short delay to ensure user interaction
+        setTimeout(() => {
+            this.modalReadyForSubmission = true;
+            console.log('🔍 DEBUG: Modal ready for form submission');
+        }, 1000);
     }
 
     async handleBookingSubmission() {
-        const formData = new FormData(document.getElementById('bookingForm'));
+        const form = document.getElementById('bookingForm');
+        console.log('🔍 DEBUG: Form element found:', !!form);
+        
+        // Debug: Check form inputs directly
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const phoneInput = document.getElementById('phone');
+        const emailInput = document.getElementById('email');
+        
+        console.log('🔍 DEBUG: Input elements:');
+        console.log('  firstName:', firstNameInput?.value);
+        console.log('  lastName:', lastNameInput?.value);
+        console.log('  phone:', phoneInput?.value);
+        console.log('  email:', emailInput?.value);
+        
+        const formData = new FormData(form);
+        
+        // Debug: Log all form data
+        console.log('🔍 DEBUG: Form data capture:');
+        for (let [key, value] of formData.entries()) {
+            console.log(`  ${key}: "${value}" (length: ${value.length})`);
+        }
+        
         const bookingData = {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
@@ -221,18 +302,21 @@ class StudentTicketingSystem {
             bookingDate: new Date().toISOString()
         };
 
+        // Debug: Log booking data
+        console.log('🔍 DEBUG: Booking data object:', bookingData);
+
         // Validate form
         if (!this.validateBooking(bookingData)) {
             return;
         }
 
         try {
-            // Save booking to server
-            await this.saveBooking(bookingData);
+            // Store temporary booking data for payment confirmation
+            // DON'T save to server yet - only after payment confirmation
+            this.tempBookingData = bookingData;
             
-            // Mark seat as pending (yellow) when form is submitted
-            this.pendingSeats.add(this.currentBookingSeat);
-            this.selectedSeats.delete(this.currentBookingSeat);
+            // Keep seat selected (blue) until payment is confirmed
+            this.selectedSeats.add(this.currentBookingSeat);
             this.updateSeatDisplay();
             this.updateBookingSummary();
             
@@ -242,9 +326,11 @@ class StudentTicketingSystem {
             
             // Clear form
             document.getElementById('bookingForm').reset();
+            
+            console.log('✅ Booking form submitted - waiting for payment confirmation');
         } catch (error) {
-            // Error already handled in saveBooking method
             console.error('Failed to submit booking:', error);
+            alert('Ошибка при обработке бронирования: ' + error.message);
         }
     }
 
@@ -263,29 +349,43 @@ class StudentTicketingSystem {
         this.showModal('paymentModal');
     }
 
-    handlePaymentConfirmation() {
-        if (!this.currentBookingSeat) return;
+    async handlePaymentConfirmation() {
+        if (!this.currentBookingSeat || !this.tempBookingData) {
+            console.error('❌ No booking data available for payment confirmation');
+            return;
+        }
 
-        // In student version, seats remain pending (yellow) until admin confirms payment
-        // The seat will turn red only after admin confirmation via real-time updates
-        // Keep seat as pending (yellow) - don't mark as reserved (red) yet
-        this.pendingSeats.add(this.currentBookingSeat);
-        this.selectedSeats.delete(this.currentBookingSeat);
-        this.updateSeatDisplay();
-        this.updateBookingSummary();
-        
-        // Show confirmation message
-        this.hideModal('paymentModal');
-        this.showConfirmationModal();
-        
-        // Save data
-        this.saveData();
-        
-        // Start real-time updates to get admin confirmation
-        this.startRealTimeUpdates();
-        
-        // Clear current booking seat
-        this.currentBookingSeat = null;
+        try {
+            console.log('💳 Processing payment confirmation...');
+            
+            // NOW save booking to server after payment confirmation
+            await this.saveBooking(this.tempBookingData);
+            
+            // Mark seat as pending (yellow) after successful server booking
+            this.pendingSeats.add(this.currentBookingSeat);
+            this.selectedSeats.delete(this.currentBookingSeat);
+            this.updateSeatDisplay();
+            this.updateBookingSummary();
+            
+            // Show confirmation message
+            this.hideModal('paymentModal');
+            this.showConfirmationModal();
+            
+            // Save data
+            this.saveData();
+            
+            // Start real-time updates to get admin confirmation
+            this.startRealTimeUpdates();
+            
+            // Clear temporary data
+            this.tempBookingData = null;
+            this.currentBookingSeat = null;
+            
+            console.log('✅ Payment confirmed and booking saved to server');
+        } catch (error) {
+            console.error('❌ Error confirming payment:', error);
+            alert('Ошибка при подтверждении оплаты: ' + error.message);
+        }
     }
 
     // Handle booking cancellation
@@ -296,17 +396,30 @@ class StudentTicketingSystem {
             this.selectedSeats.delete(this.currentBookingSeat);
             this.updateSeatDisplay();
             this.updateBookingSummary();
+            
+            // Clear temporary booking data
+            this.tempBookingData = null;
             this.currentBookingSeat = null;
+            
+            console.log('❌ Booking cancelled - seat returned to available state');
         }
     }
 
     validateBooking(data) {
         const errors = [];
 
-        if (!data.firstName.trim()) errors.push('Имя обязательно');
-        if (!data.lastName.trim()) errors.push('Фамилия обязательна');
-        if (!data.phone.trim()) errors.push('Телефон обязателен');
-        if (!data.email.trim()) errors.push('Электронная почта обязательна');
+        // Debug: Log validation data
+        console.log('🔍 DEBUG: Validation data:', {
+            firstName: `"${data.firstName}" (type: ${typeof data.firstName})`,
+            lastName: `"${data.lastName}" (type: ${typeof data.lastName})`,
+            phone: `"${data.phone}" (type: ${typeof data.phone})`,
+            email: `"${data.email}" (type: ${typeof data.email})`
+        });
+
+        if (!data.firstName || !data.firstName?.trim()) errors.push('Имя обязательно');
+        if (!data.lastName || !data.lastName?.trim()) errors.push('Фамилия обязательна');
+        if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
+        if (!data.email || !data.email?.trim()) errors.push('Электронная почта обязательна');
 
         // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -326,6 +439,32 @@ class StudentTicketingSystem {
         }
 
         return true;
+    }
+
+    // Test function to validate the validation logic
+    testValidation() {
+        console.log('🧪 Testing validation logic...');
+        
+        // Test with empty data
+        const emptyData = { firstName: '', lastName: '', phone: '', email: '' };
+        console.log('🧪 Test 1 - Empty data:', this.validateBooking(emptyData));
+        
+        // Test with filled data
+        const filledData = { 
+            firstName: 'Иван', 
+            lastName: 'Иванов', 
+            phone: '+996555123456', 
+            email: 'ivan@example.com' 
+        };
+        console.log('🧪 Test 2 - Filled data:', this.validateBooking(filledData));
+        
+        // Test with null data
+        const nullData = { firstName: null, lastName: null, phone: null, email: null };
+        console.log('🧪 Test 3 - Null data:', this.validateBooking(nullData));
+        
+        // Test with undefined data
+        const undefinedData = { firstName: undefined, lastName: undefined, phone: undefined, email: undefined };
+        console.log('🧪 Test 4 - Undefined data:', this.validateBooking(undefinedData));
     }
 
     async saveBooking(bookingData) {
@@ -466,6 +605,98 @@ class StudentTicketingSystem {
         this.updateTransform();
     }
 
+    // Touch handling methods for mobile pinch-to-zoom
+    handleTouchStart(e) {
+        e.preventDefault();
+        this.touches = Array.from(e.touches);
+        
+        if (this.touches.length === 1) {
+            // Single touch - start panning
+            this.isDragging = true;
+            this.isPinching = false;
+            this.dragStart = { 
+                x: this.touches[0].clientX - this.currentPanX, 
+                y: this.touches[0].clientY - this.currentPanY 
+            };
+        } else if (this.touches.length === 2) {
+            // Two touches - start pinching
+            this.isPinching = true;
+            this.isDragging = false;
+            this.lastTouchDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+            this.lastPinchCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
+        }
+    }
+
+    handleTouchMove(e) {
+        e.preventDefault();
+        this.touches = Array.from(e.touches);
+        
+        if (this.isPinching && this.touches.length === 2) {
+            // Handle pinch-to-zoom
+            const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+            const currentCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
+            
+            if (this.lastTouchDistance > 0) {
+                const scale = currentDistance / this.lastTouchDistance;
+                const newZoom = Math.max(0.5, Math.min(3, this.currentZoom * scale));
+                
+                // Calculate zoom center offset
+                const zoomCenterX = currentCenter.x - this.currentPanX;
+                const zoomCenterY = currentCenter.y - this.currentPanY;
+                
+                // Apply zoom with center point
+                this.currentZoom = newZoom;
+                this.currentPanX = currentCenter.x - zoomCenterX * (newZoom / this.currentZoom);
+                this.currentPanY = currentCenter.y - zoomCenterY * (newZoom / this.currentZoom);
+                
+                this.updateTransform();
+            }
+            
+            this.lastTouchDistance = currentDistance;
+            this.lastPinchCenter = currentCenter;
+        } else if (this.isDragging && this.touches.length === 1) {
+            // Handle single touch panning
+            const touch = this.touches[0];
+            this.currentPanX = touch.clientX - this.dragStart.x;
+            this.currentPanY = touch.clientY - this.dragStart.y;
+            this.updateTransform();
+        }
+    }
+
+    handleTouchEnd(e) {
+        e.preventDefault();
+        this.touches = Array.from(e.touches);
+        
+        if (this.touches.length === 0) {
+            // All touches ended
+            this.isDragging = false;
+            this.isPinching = false;
+            this.lastTouchDistance = 0;
+        } else if (this.touches.length === 1 && this.isPinching) {
+            // Pinch ended, switch to single touch panning
+            this.isPinching = false;
+            this.isDragging = true;
+            this.dragStart = { 
+                x: this.touches[0].clientX - this.currentPanX, 
+                y: this.touches[0].clientY - this.currentPanY 
+            };
+        }
+    }
+
+    // Helper methods for touch calculations
+    getTouchDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    getTouchCenter(touch1, touch2) {
+        return {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+        };
+    }
+
     // Function to get seat color based on status
     getSeatColor(status) {
         switch(status) {
@@ -473,7 +704,7 @@ class StudentTicketingSystem {
             case 'pending': return '#FFD700';    // yellow
             case 'reserved': return '#FF4C4C';   // red
             case 'prebooked': return '#FF4C4C';  // red (same as reserved)
-            default: return '#FFFFFF';           // white
+            default: return '#4CAF50';           // green (default to available for undefined statuses)
         }
     }
 
@@ -486,7 +717,7 @@ class StudentTicketingSystem {
             case 'reserved':
             case 'confirmed': return 'reserved';
             case 'prebooked': return 'prebooked';
-            default: return 'unknown';
+            default: return 'available'; // Default to available for undefined statuses
         }
     }
 
@@ -503,7 +734,7 @@ class StudentTicketingSystem {
             'prebooked': 'Booked (Paid)',
             'cancelled': 'Cancelled'
         };
-        return statusMap[status] || status;
+        return statusMap[status] || 'Available'; // Default to Available for undefined statuses
     }
 
     updateSeatDisplay() {
@@ -610,6 +841,12 @@ class StudentTicketingSystem {
         // Apply status-based styling
         const statusClass = this.getSeatClass(status);
         seatElement.classList.add(statusClass);
+        
+        // Get seat number from dataset
+        const seatNumber = seatElement.dataset.seat;
+        
+        // Always show seat number
+        seatElement.textContent = seatNumber;
         
         // Apply appropriate color based on status - explicit mapping
         if (status === 'reserved' || status === 'confirmed' || status === 'paid' || status === 'Оплачен') {
@@ -755,8 +992,6 @@ class StudentTicketingSystem {
     // Socket.IO initialization for real-time updates
     initializeSocket() {
         try {
-            console.log('🔌 Initializing Socket.IO connection to http://localhost:3000...');
-            
             // Connection status tracking
             this.socketStatus = {
                 connected: false,
@@ -768,8 +1003,10 @@ class StudentTicketingSystem {
                 maxConnectionAttempts: 10
             };
             
-            // Initialize Socket.IO with explicit URL and options
-            this.socket = io('http://localhost:3000', {
+            // Initialize Socket.IO with dynamic URL for production compatibility
+            const socketUrl = window.location.origin;
+            console.log('🔌 Initializing Socket.IO connection to', socketUrl, '...');
+            this.socket = io(socketUrl, {
                 transports: ['websocket', 'polling'],
                 timeout: 20000,
                 forceNew: true,
@@ -1414,6 +1651,173 @@ Socket.IO Diagnostics:
         console.log('Real-time seat updates stopped');
     }
 
+
+    // Handle seat click/touch for booking
+    handleSeatClick(seatElement, event) {
+        try {
+            const table = parseInt(seatElement.dataset.table);
+            const seat = parseInt(seatElement.dataset.seat);
+            const seatId = `${table}-${seat}`;
+            
+            console.log(`🪑 Seat clicked: Table ${table}, Seat ${seat} (${seatId})`);
+            
+            // Prevent default behavior to avoid layout shifts
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
+            // Check if seat is available for booking
+            if (seatElement.classList.contains('booked') || 
+                seatElement.classList.contains('reserved') ||
+                seatElement.classList.contains('prebooked') ||
+                seatElement.classList.contains('pending')) {
+                console.log('❌ Seat is not available for booking');
+                this.showSeatStatusModal(table, seat, seatElement.classList);
+                return;
+            }
+            
+            // If seat is available, open booking modal immediately
+            if (seatElement.classList.contains('available') || seatElement.classList.contains('active')) {
+                console.log(`✅ Opening booking modal for seat: ${seatId}`);
+                this.showBookingModal(seatId);
+                return;
+            }
+            
+            // For any other status, show status modal
+            this.showSeatStatusModal(table, seat, seatElement.classList);
+            
+        } catch (error) {
+            console.error('❌ Error handling seat click:', error);
+        }
+    }
+    
+    // Show seat status modal for unavailable seats
+    showSeatStatusModal(table, seat, classList) {
+        let status = 'Available';
+        let message = 'Это место доступно для бронирования.';
+        
+        if (classList.contains('booked')) {
+            status = 'Забронировано';
+            message = 'Это место уже забронировано и оплачено.';
+        } else if (classList.contains('prebooked')) {
+            status = 'Предварительно забронировано';
+            message = 'Это место предварительно забронировано администратором.';
+        } else if (classList.contains('pending')) {
+            status = 'Ожидает оплаты';
+            message = 'Это место забронировано, но еще не оплачено.';
+        }
+        
+        // Create and show modal
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>Место ${table}-${seat}</h3>
+                <p><strong>Статус:</strong> ${status}</p>
+                <p>${message}</p>
+                <button class="btn btn-primary" onclick="this.closest('.modal').remove()">ОК</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (modal.parentNode) {
+                modal.remove();
+            }
+        }, 3000);
+    }
+    
+    // Update booking summary
+    updateBookingSummary() {
+        const selectedCount = this.selectedSeats.size;
+        const totalPrice = selectedCount * this.ticketPrice;
+        
+        // Update summary display if elements exist
+        const selectedCountEl = document.getElementById('selectedCount');
+        const totalPriceEl = document.getElementById('totalPrice');
+        const bookNowBtn = document.getElementById('bookNowBtn');
+        
+        if (selectedCountEl) selectedCountEl.textContent = selectedCount;
+        if (totalPriceEl) totalPriceEl.textContent = totalPrice.toLocaleString();
+        
+        // Enable/disable book now button
+        if (bookNowBtn) {
+            bookNowBtn.disabled = selectedCount === 0;
+            bookNowBtn.textContent = selectedCount > 0 ? 
+                `Забронировать ${selectedCount} мест` : 'Выберите места';
+        }
+        
+        console.log(`📊 Booking summary updated: ${selectedCount} seats, ${totalPrice} сом`);
+    }
+
+    // Update individual seat status and appearance
+
+    // Update seats from Socket.IO data
+    updateSeatsFromSocketData(seatStatuses) {
+        try {
+            console.log('🔄 Updating seats from Socket.IO data...');
+            
+            // Clear existing seat states
+            this.bookedSeats.clear();
+            this.prebookedSeats.clear();
+            this.pendingSeats.clear();
+            
+            // Update seat statuses based on server data
+            Object.entries(seatStatuses).forEach(([seatId, status]) => {
+                const [table, seat] = seatId.split('-').map(Number);
+                const seatElement = document.querySelector(`[data-table="${table}"][data-seat="${seat}"]`);
+                
+                if (seatElement) {
+                    // Remove all status classes
+                    seatElement.classList.remove('booked', 'prebooked', 'pending', 'available', 'active', 'reserved');
+                    
+                    // Add appropriate class and update sets
+                    switch (status) {
+                        case 'reserved':
+                        case 'paid':
+                            seatElement.classList.add('booked');
+                            this.bookedSeats.add(seatId);
+                            break;
+                        case 'pending':
+                            seatElement.classList.add('pending');
+                            this.pendingSeats.add(seatId);
+                            break;
+                        case 'prebooked':
+                            seatElement.classList.add('prebooked');
+                            this.prebookedSeats.add(seatId);
+                            break;
+                        case 'active':
+                        default:
+                            seatElement.classList.add('available');
+                            break;
+                    }
+                    
+                    // Update seat text and color
+                    const seatId = `${table}-${seat}`;
+                    this.updateSeatStatus(seatId, status);
+                }
+            });
+            
+            // Update statistics
+            this.updateStatistics();
+            
+            console.log('✅ Seats updated from Socket.IO data');
+            console.log('📊 Current status:', {
+                booked: this.bookedSeats.size,
+                pending: this.pendingSeats.size,
+                prebooked: this.prebookedSeats.size,
+                available: this.totalSeats - this.bookedSeats.size - this.pendingSeats.size - this.prebookedSeats.size
+            });
+            
+        } catch (error) {
+            console.error('❌ Error updating seats from Socket.IO data:', error);
+        }
+    }
+
     async checkForSeatUpdates() {
         try {
             // Fetch current seat statuses from server
@@ -1449,15 +1853,5 @@ document.addEventListener('DOMContentLoaded', () => {
     new StudentTicketingSystem();
 });
 
-// Add touch support for mobile devices
-document.addEventListener('touchstart', (e) => {
-    if (e.target.closest('#hallLayout')) {
-        e.preventDefault();
-    }
-}, { passive: false });
-
-document.addEventListener('touchmove', (e) => {
-    if (e.target.closest('#hallLayout')) {
-        e.preventDefault();
-    }
-}, { passive: false });
+// Touch support is now handled by the StudentTicketingSystem class
+// The global touch handlers are removed to allow proper pinch-to-zoom functionality

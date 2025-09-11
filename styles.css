@@ -211,6 +211,11 @@ body {
     position: relative;
     background: #f8f9fa;
     cursor: grab;
+    touch-action: none; /* Prevent default touch behaviors for custom pinch handling */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .hall-layout:active {
@@ -222,7 +227,8 @@ body {
     height: 100%;
     position: relative;
     transform-origin: center center;
-    transition: transform 0.3s ease;
+    transition: transform 0.1s ease; /* Faster transition for better touch responsiveness */
+    will-change: transform; /* Optimize for transform animations */
 }
 
 /* Tables Layout */
@@ -287,18 +293,19 @@ body {
 
 .seat {
     position: absolute;
-    width: 20px;
-    height: 20px;
+    width: 40px;
+    height: 40px;
     border: 2px solid #e9ecef;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.6rem;
+    font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
     background: white;
+    z-index: 10;
 }
 
 .seat:hover {
@@ -352,12 +359,6 @@ body {
     cursor: not-allowed;
 }
 
-.seat.unknown {
-    background: #FFFFFF;
-    color: #333;
-    border-color: #ccc;
-    cursor: not-allowed;
-}
 
 @keyframes pulse {
     0% { transform: scale(1); }
@@ -394,8 +395,8 @@ body {
 }
 
 .seat-sample {
-    width: 20px;
-    height: 20px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 2px solid;
 }
@@ -430,10 +431,6 @@ body {
     border-color: #FFD700;
 }
 
-.seat-sample.unknown {
-    background: #FFFFFF;
-    border-color: #ccc;
-}
 
 /* Payment Info */
 .payment-info {
@@ -746,6 +743,39 @@ body {
     margin-right: 0.25rem;
 }
 
+/* Mobile Touch Improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Mobile devices with touch screens */
+    .hall-layout {
+        height: 500px; /* Slightly smaller on mobile */
+    }
+    
+    .seat {
+        min-width: 36px;
+        min-height: 36px;
+        font-size: 0.8rem;
+    }
+    
+    .table-circle {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .zoom-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        flex-direction: row;
+        gap: 10px;
+    }
+    
+    .zoom-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 1.4rem;
+    }
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .event-info .container {
@@ -769,9 +799,9 @@ body {
     }
     
     .seat {
-        width: 15px;
-        height: 15px;
-        font-size: 0.5rem;
+        width: 32px;
+        height: 32px;
+        font-size: 0.7rem;
     }
     
     .bank-details {

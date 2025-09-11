@@ -1637,7 +1637,7 @@ ID бронирования: ${bookingId}
     // Socket.IO initialization for real-time updates
     initializeSocket() {
         try {
-            this.socket = io('http://localhost:3000', {
+            this.socket = io(window.location.origin, {
                 transports: ['websocket', 'polling'],
                 timeout: 20000,
                 forceNew: true,
