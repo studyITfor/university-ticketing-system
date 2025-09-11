@@ -48,6 +48,11 @@ class StudentTicketingSystem {
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
         
+        // Add window resize listener to recalculate seat positions
+        window.addEventListener('resize', () => {
+            this.recalculateSeatPositions();
+        });
+        
         // Debug: Validation testing removed to prevent automatic alerts
     }
 
@@ -272,15 +277,33 @@ class StudentTicketingSystem {
             seatElement.dataset.seat = seat;
             seatElement.dataset.seatId = `${tableNumber}-${seat}`;
 
+            // Calculate responsive radius based on screen size and seat count
+            const isMobile = window.innerWidth <= 768;
+            const isSmallMobile = window.innerWidth <= 480;
+            
+            // Adjust radius based on screen size and number of seats
+            let radius = 50; // Default radius
+            if (isSmallMobile) {
+                radius = 35; // Smaller radius for very small screens
+            } else if (isMobile) {
+                radius = 40; // Medium radius for mobile screens
+            }
+            
+            // Ensure minimum spacing between seats
+            const minRadius = Math.max(radius, 30 + (this.seatsPerTable * 2));
+            radius = Math.min(radius, minRadius);
+            
             // Position seats in a circle around the table
             const angle = (seat - 1) * (360 / this.seatsPerTable);
-            const radius = 50; // Distance from center
             const x = 50 + radius * Math.cos(angle * Math.PI / 180);
             const y = 50 + radius * Math.sin(angle * Math.PI / 180);
 
             seatElement.style.left = `${x}%`;
             seatElement.style.top = `${y}%`;
             seatElement.style.transform = 'translate(-50%, -50%)';
+            
+            // Add z-index to ensure proper layering
+            seatElement.style.zIndex = '10';
 
             seatsContainer.appendChild(seatElement);
         }
@@ -502,6 +525,38 @@ class StudentTicketingSystem {
     }
 
     // Test function removed - was causing automatic validation alerts on page load
+
+    // Recalculate seat positions when window is resized
+    recalculateSeatPositions() {
+        const seats = document.querySelectorAll('.seat');
+        seats.forEach(seat => {
+            const tableNumber = parseInt(seat.dataset.table);
+            const seatNumber = parseInt(seat.dataset.seat);
+            
+            // Calculate responsive radius based on current screen size
+            const isMobile = window.innerWidth <= 768;
+            const isSmallMobile = window.innerWidth <= 480;
+            
+            let radius = 50; // Default radius
+            if (isSmallMobile) {
+                radius = 35; // Smaller radius for very small screens
+            } else if (isMobile) {
+                radius = 40; // Medium radius for mobile screens
+            }
+            
+            // Ensure minimum spacing between seats
+            const minRadius = Math.max(radius, 30 + (this.seatsPerTable * 2));
+            radius = Math.min(radius, minRadius);
+            
+            // Position seats in a circle around the table
+            const angle = (seatNumber - 1) * (360 / this.seatsPerTable);
+            const x = 50 + radius * Math.cos(angle * Math.PI / 180);
+            const y = 50 + radius * Math.sin(angle * Math.PI / 180);
+
+            seat.style.left = `${x}%`;
+            seat.style.top = `${y}%`;
+        });
+    }
 
     async saveBooking(bookingData) {
         try {

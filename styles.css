@@ -798,19 +798,32 @@ body {
     
     .tables-grid {
         grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
+        gap: 1.5rem;
         padding: 1rem;
     }
     
     .table-circle {
-        width: 80px;
-        height: 80px;
+        width: 120px;
+        height: 120px;
+        /* Ensure enough space for seats */
+        min-width: 120px;
+        min-height: 120px;
     }
     
     .seat {
-        width: 32px;
-        height: 32px;
-        font-size: 0.7rem;
+        width: 44px;
+        height: 44px;
+        font-size: 0.8rem;
+        /* Ensure minimum touch target size */
+        min-width: 44px;
+        min-height: 44px;
+        /* Add spacing to prevent overlapping */
+        margin: 2px;
+    }
+    
+    .seats-container {
+        /* Add padding to prevent seats from touching table edge */
+        padding: 8px;
     }
     
     .bank-details {
@@ -858,6 +871,32 @@ body {
     
     .tables-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+        padding: 1.5rem;
+    }
+    
+    .table-circle {
+        width: 140px;
+        height: 140px;
+        /* Ensure enough space for seats on very small screens */
+        min-width: 140px;
+        min-height: 140px;
+    }
+    
+    .seat {
+        width: 48px;
+        height: 48px;
+        font-size: 0.9rem;
+        /* Ensure minimum touch target size for very small screens */
+        min-width: 48px;
+        min-height: 48px;
+        /* Add more spacing to prevent overlapping */
+        margin: 3px;
+    }
+    
+    .seats-container {
+        /* Add more padding for very small screens */
+        padding: 12px;
     }
     
     .legend-items {
