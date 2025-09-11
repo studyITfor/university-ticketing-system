@@ -39,10 +39,7 @@ class StudentTicketingSystem {
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
         
-        // Test validation logic on startup (for debugging)
-        setTimeout(() => {
-            this.testValidation();
-        }, 2000);
+        // Debug: Validation testing removed to prevent automatic alerts
     }
 
     setupEventListeners() {
@@ -114,14 +111,12 @@ class StudentTicketingSystem {
             // Prevent submission if no seat is selected (shouldn't happen, but safety check)
             if (!this.currentBookingSeat) {
                 console.log('⚠️ DEBUG: No seat selected for booking!');
-                alert('DEBUG: No seat selected. Please click on a seat first.');
                 return;
             }
             
             // Prevent premature submission (before user has time to fill form)
             if (!this.modalReadyForSubmission) {
                 console.log('⚠️ DEBUG: Form submitted too early - modal not ready yet!');
-                alert('DEBUG: Please wait a moment for the form to load, then fill it out before submitting.');
                 return;
             }
             
@@ -144,7 +139,6 @@ class StudentTicketingSystem {
             if (!hasValues) {
                 console.log('⚠️ DEBUG: Form submitted with no values - this might be the issue!');
                 console.log('🔍 DEBUG: This suggests the form is being submitted before user fills it out');
-                alert('DEBUG: Form was submitted with empty values. Please fill out the form first, then click "Забронировать место".');
                 return;
             }
             
@@ -441,31 +435,7 @@ class StudentTicketingSystem {
         return true;
     }
 
-    // Test function to validate the validation logic
-    testValidation() {
-        console.log('🧪 Testing validation logic...');
-        
-        // Test with empty data
-        const emptyData = { firstName: '', lastName: '', phone: '', email: '' };
-        console.log('🧪 Test 1 - Empty data:', this.validateBooking(emptyData));
-        
-        // Test with filled data
-        const filledData = { 
-            firstName: 'Иван', 
-            lastName: 'Иванов', 
-            phone: '+996555123456', 
-            email: 'ivan@example.com' 
-        };
-        console.log('🧪 Test 2 - Filled data:', this.validateBooking(filledData));
-        
-        // Test with null data
-        const nullData = { firstName: null, lastName: null, phone: null, email: null };
-        console.log('🧪 Test 3 - Null data:', this.validateBooking(nullData));
-        
-        // Test with undefined data
-        const undefinedData = { firstName: undefined, lastName: undefined, phone: undefined, email: undefined };
-        console.log('🧪 Test 4 - Undefined data:', this.validateBooking(undefinedData));
-    }
+    // Test function removed - was causing automatic validation alerts on page load
 
     async saveBooking(bookingData) {
         try {
