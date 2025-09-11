@@ -229,6 +229,12 @@ body {
     transform-origin: center center;
     transition: transform 0.1s ease; /* Faster transition for better touch responsiveness */
     will-change: transform; /* Optimize for transform animations */
+    
+    /* Touch handling for pinch-to-zoom */
+    touch-action: none; /* Disable browser pinch zoom, use custom implementation */
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
 }
 
 /* Tables Layout */

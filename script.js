@@ -14,6 +14,13 @@ class StudentTicketingSystem {
         this.currentPanY = 0;
         this.isDragging = false;
         this.dragStart = { x: 0, y: 0 };
+        
+        // Pinch-to-zoom properties
+        this.isPinching = false;
+        this.lastDistance = null;
+        this.pinchOriginX = undefined;
+        this.pinchOriginY = undefined;
+        this.recentlyPinched = false;
         this.currentBookingSeat = null;
         this.tempBookingData = null;
         this.modalReadyForSubmission = false; // Store temporary booking data before payment
@@ -69,10 +76,7 @@ class StudentTicketingSystem {
         hallLayout.addEventListener('mouseup', () => this.endDrag());
         hallLayout.addEventListener('wheel', (e) => this.handleWheel(e));
         
-        // Touch events for mobile pinch-to-zoom
-        hallLayout.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-        hallLayout.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-        hallLayout.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+        // Touch events are now handled on hallContent for better seat selection
 
         // Seat selection - comprehensive event support for all devices
         const hallContent = document.getElementById('hallContent');
@@ -85,7 +89,7 @@ class StudentTicketingSystem {
             }
         });
         
-        // Touch events for mobile - multiple approaches for better compatibility
+        // Touch events for mobile - unified pinch-to-zoom and seat selection
         hallContent.addEventListener('touchstart', (e) => {
             this.touches = Array.from(e.touches);
             
@@ -100,45 +104,64 @@ class StudentTicketingSystem {
                 };
             }
             
-            // Handle pinch-to-zoom
+            // Handle pinch-to-zoom initialization
             if (this.touches.length === 2) {
                 this.isPinching = true;
-                this.lastTouchDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
-                this.lastPinchCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
-                console.log('📱 Pinch gesture started');
+                this.recentlyPinched = false;
+                const { distance, midX, midY } = this.getDistanceAndMidpoint(this.touches);
+                this.lastDistance = distance;
+                this.lastPinchCenter = { x: midX, y: midY };
+                
+                // Set transform origin to pinch center
+                const coords = this.screenToElementCoords(midX, midY, hallContent);
+                this.pinchOriginX = coords.ex;
+                this.pinchOriginY = coords.ey;
+                
+                console.log('📱 Pinch gesture started - distance:', distance, 'center:', midX, midY);
+                e.preventDefault(); // Prevent browser pinch zoom
             }
-        });
+        }, { passive: false });
         
         hallContent.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Prevent scrolling during touch
-            
             this.touches = Array.from(e.touches);
             
             // Handle pinch-to-zoom
             if (this.touches.length === 2 && this.isPinching) {
-                const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
-                const currentCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
+                const { distance, midX, midY } = this.getDistanceAndMidpoint(this.touches);
                 
-                if (this.lastTouchDistance > 0) {
-                    const scale = currentDistance / this.lastTouchDistance;
-                    this.zoomIn(scale - 1); // Adjust zoom based on scale change
+                if (this.lastDistance != null) {
+                    const delta = distance - this.lastDistance; // positive => fingers apart => zoom in
+                    const sensitivity = 0.004;
+                    const newScale = Math.max(0.6, Math.min(2.0, this.currentZoom + delta * sensitivity));
                     
-                    // Pan based on center movement
-                    const deltaX = currentCenter.x - this.lastPinchCenter.x;
-                    const deltaY = currentCenter.y - this.lastPinchCenter.y;
-                    this.pan(deltaX, deltaY);
+                    // Update transform origin to current midpoint for natural zooming
+                    const coords = this.screenToElementCoords(midX, midY, hallContent);
+                    this.pinchOriginX = coords.ex;
+                    this.pinchOriginY = coords.ey;
+                    
+                    this.currentZoom = newScale;
+                    this.updateTransform();
+                    
+                    console.log('📱 Pinch move - delta:', delta, 'new scale:', newScale, 'origin:', coords);
                 }
                 
-                this.lastTouchDistance = currentDistance;
-                this.lastPinchCenter = currentCenter;
+                this.lastDistance = distance;
+                this.lastPinchCenter = { x: midX, y: midY };
+                e.preventDefault(); // Prevent browser pinch zoom
             }
-        });
+        }, { passive: false });
         
         hallContent.addEventListener('touchend', (e) => {
             // Reset pinch state
             if (this.touches.length < 2) {
                 this.isPinching = false;
-                this.lastTouchDistance = 0;
+                this.lastDistance = null;
+                this.recentlyPinched = true;
+                
+                // Reset recentlyPinched flag after cooldown
+                setTimeout(() => {
+                    this.recentlyPinched = false;
+                }, 300);
             }
             
             // Check if this is a tap on a seat (not a drag or pinch)
@@ -149,8 +172,8 @@ class StudentTicketingSystem {
                     { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
                 );
                 
-                // Only handle as seat selection if it's a quick tap (not a drag)
-                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.isPinching) {
+                // Only handle as seat selection if it's a quick tap (not a drag or recent pinch)
+                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('📱 Mobile seat tap detected:', e.target);
@@ -158,7 +181,7 @@ class StudentTicketingSystem {
                 }
                 this.touchedSeat = null;
             }
-        });
+        }, { passive: false });
         
         // Pointer events for modern browsers (includes both mouse and touch)
         hallContent.addEventListener('pointerdown', (e) => {
@@ -600,6 +623,22 @@ class StudentTicketingSystem {
         };
     }
 
+    // New helper methods for proper pinch-to-zoom
+    getDistanceAndMidpoint(touches) {
+        const x1 = touches[0].clientX, y1 = touches[0].clientY;
+        const x2 = touches[1].clientX, y2 = touches[1].clientY;
+        const dx = x1 - x2, dy = y1 - y2;
+        const distance = Math.hypot(dx, dy);
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        return { distance, midX, midY };
+    }
+
+    screenToElementCoords(x, y, el) {
+        const rect = el.getBoundingClientRect();
+        return { ex: x - rect.left, ey: y - rect.top };
+    }
+
     async saveBooking(bookingData) {
         try {
             // Send booking to server
@@ -709,6 +748,12 @@ class StudentTicketingSystem {
 
     updateTransform() {
         const hallContent = document.getElementById('hallContent');
+        
+        // Use pinch origin if available, otherwise use center
+        const originX = this.pinchOriginX !== undefined ? this.pinchOriginX : '50%';
+        const originY = this.pinchOriginY !== undefined ? this.pinchOriginY : '50%';
+        
+        hallContent.style.transformOrigin = `${originX}px ${originY}px`;
         hallContent.style.transform = `translate(${this.currentPanX}px, ${this.currentPanY}px) scale(${this.currentZoom})`;
     }
 
@@ -739,100 +784,7 @@ class StudentTicketingSystem {
     }
 
     // Touch handling methods for mobile pinch-to-zoom
-    handleTouchStart(e) {
-        e.preventDefault();
-        this.touches = Array.from(e.touches);
-        
-        // Record touch start time and position for tap detection
-        this.touchStartTime = Date.now();
-        if (this.touches.length === 1) {
-            this.touchStartPosition = {
-                x: this.touches[0].clientX,
-                y: this.touches[0].clientY
-            };
-        }
-        
-        if (this.touches.length === 1) {
-            // Single touch - don't set isDragging immediately, wait for movement
-            this.isDragging = false;
-            this.isPinching = false;
-            this.dragStart = { 
-                x: this.touches[0].clientX - this.currentPanX, 
-                y: this.touches[0].clientY - this.currentPanY 
-            };
-        } else if (this.touches.length === 2) {
-            // Two touches - start pinching
-            this.isPinching = true;
-            this.isDragging = false;
-            this.lastTouchDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
-            this.lastPinchCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
-        }
-    }
-
-    handleTouchMove(e) {
-        e.preventDefault();
-        this.touches = Array.from(e.touches);
-        
-        if (this.isPinching && this.touches.length === 2) {
-            // Handle pinch-to-zoom
-            const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
-            const currentCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
-            
-            if (this.lastTouchDistance > 0) {
-                const scale = currentDistance / this.lastTouchDistance;
-                const newZoom = Math.max(0.5, Math.min(3, this.currentZoom * scale));
-                
-                // Calculate zoom center offset
-                const zoomCenterX = currentCenter.x - this.currentPanX;
-                const zoomCenterY = currentCenter.y - this.currentPanY;
-                
-                // Apply zoom with center point
-                this.currentZoom = newZoom;
-                this.currentPanX = currentCenter.x - zoomCenterX * (newZoom / this.currentZoom);
-                this.currentPanY = currentCenter.y - zoomCenterY * (newZoom / this.currentZoom);
-                
-                this.updateTransform();
-            }
-            
-            this.lastTouchDistance = currentDistance;
-            this.lastPinchCenter = currentCenter;
-        } else if (this.touches.length === 1) {
-            // Check if this is actual dragging (not just a tap)
-            const touch = this.touches[0];
-            const distance = this.getTouchDistance(
-                { clientX: this.touchStartPosition.x, clientY: this.touchStartPosition.y },
-                { clientX: touch.clientX, clientY: touch.clientY }
-            );
-            
-            if (distance > this.dragThreshold) {
-                // This is actual dragging, not a tap
-                this.isDragging = true;
-                this.currentPanX = touch.clientX - this.dragStart.x;
-                this.currentPanY = touch.clientY - this.dragStart.y;
-                this.updateTransform();
-            }
-        }
-    }
-
-    handleTouchEnd(e) {
-        e.preventDefault();
-        this.touches = Array.from(e.touches);
-        
-        if (this.touches.length === 0) {
-            // All touches ended
-            this.isDragging = false;
-            this.isPinching = false;
-            this.lastTouchDistance = 0;
-        } else if (this.touches.length === 1 && this.isPinching) {
-            // Pinch ended, switch to single touch panning
-            this.isPinching = false;
-            this.isDragging = true;
-            this.dragStart = { 
-                x: this.touches[0].clientX - this.currentPanX, 
-                y: this.touches[0].clientY - this.currentPanY 
-            };
-        }
-    }
+    // Old touch handling methods removed - now using unified approach in main event listeners
 
     // Helper methods for touch calculations
     getTouchDistance(touch1, touch2) {
