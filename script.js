@@ -13,6 +13,7 @@ class StudentTicketingSystem {
         this.currentBookingSeat = null;
         this.tempBookingData = null;
         this.modalReadyForSubmission = false; // Store temporary booking data before payment
+        this.isSubmitting = false; // Prevent duplicate form submissions
         this.realTimeUpdateInterval = null;
         this.lastUpdateTime = Date.now();
         this.socket = null;
@@ -150,6 +151,12 @@ class StudentTicketingSystem {
             console.log('🔍 DEBUG: Event type:', e.type);
             console.log('🔍 DEBUG: Current booking seat:', this.currentBookingSeat);
             
+            // Prevent duplicate submissions
+            if (this.isSubmitting) {
+                console.log('⚠️ DEBUG: Form submission already in progress - ignoring duplicate submission');
+                return;
+            }
+            
             // Prevent submission if no seat is selected (shouldn't happen, but safety check)
             if (!this.currentBookingSeat) {
                 console.log('⚠️ DEBUG: No seat selected for booking!');
@@ -183,6 +190,9 @@ class StudentTicketingSystem {
                 console.log('🔍 DEBUG: This suggests the form is being submitted before user fills it out');
                 return;
             }
+            
+            // Set submission flag to prevent duplicates
+            this.isSubmitting = true;
             
             // Add a small delay to ensure form data is captured
             setTimeout(() => {
@@ -274,6 +284,7 @@ class StudentTicketingSystem {
         const form = document.getElementById('bookingForm');
         form.reset();
         this.modalReadyForSubmission = false;
+        this.isSubmitting = false; // Reset submission flag for new booking
         
         this.showModal('bookingModal');
         
@@ -326,6 +337,7 @@ class StudentTicketingSystem {
 
         // Validate form
         if (!this.validateBooking(bookingData)) {
+            this.isSubmitting = false; // Reset flag on validation failure
             return;
         }
 
@@ -350,6 +362,9 @@ class StudentTicketingSystem {
         } catch (error) {
             console.error('Failed to submit booking:', error);
             alert('Ошибка при обработке бронирования: ' + error.message);
+        } finally {
+            // Always reset the submission flag
+            this.isSubmitting = false;
         }
     }
 
