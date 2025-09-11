@@ -108,7 +108,7 @@ class AdminPanel {
         let touchStartX = 0;
         let touchStartY = 0;
         let hasMoved = false;
-        let touchMoveThreshold = 8; // pixels - reduced for more responsive panning
+        let touchMoveThreshold = 5; // pixels - even more responsive panning like Ticket.kg
         let lastPanTime = 0;
         let velocityX = 0;
         let velocityY = 0;
@@ -137,6 +137,7 @@ class AdminPanel {
                 const mid = this.getMidpoint(e.touches);
                 const rect = this.hall.getBoundingClientRect();
                 this.hall.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
+                this.hall.classList.add('zooming');
                 e.preventDefault();
             } else if (e.touches.length === 1) {
                 this.isPanning = true;
@@ -147,6 +148,7 @@ class AdminPanel {
                 lastPanX = e.touches[0].clientX;
                 lastPanY = e.touches[0].clientY;
                 lastPanTime = Date.now();
+                this.hall.classList.add('panning');
             }
         }, { passive: false });
 
@@ -154,7 +156,7 @@ class AdminPanel {
             if (this.isPinching && e.touches.length === 2) {
                 const dist = this.getDistance(e.touches);
                 const delta = dist - this.lastDistance;
-                const sensitivity = 0.002; // Smoother zoom like Ticket.kg
+                const sensitivity = 0.003; // Optimized zoom sensitivity for better control
                 const oldScale = this.scale;
                 this.scale = this.clamp(this.scale + delta * sensitivity, this.minScale, this.maxScale);
 
@@ -209,10 +211,12 @@ class AdminPanel {
             
             if (e.touches.length < 2) { 
                 this.isPinching = false; 
-                this.lastDistance = null; 
+                this.lastDistance = null;
+                this.hall.classList.remove('zooming');
             }
             if (e.touches.length === 0) { 
                 this.isPanning = false; 
+                this.hall.classList.remove('panning');
                 
                 // Apply momentum if dragging
                 if (isDragging && Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
@@ -1026,7 +1030,7 @@ class AdminPanel {
 
             // Position seats in a circle around the table with increased radius for better spacing
             const angle = (seat - 1) * (360 / 14);
-            const radius = 55; // Increased distance from center for better spacing with invisible table gaps
+            const radius = 65; // Increased distance from center for better spacing with larger seats
             const x = 50 + radius * Math.cos(angle * Math.PI / 180);
             const y = 50 + radius * Math.sin(angle * Math.PI / 180);
 

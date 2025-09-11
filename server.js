@@ -827,6 +827,35 @@ app.post('/api/create-booking', async (req, res) => {
         bookingData.status = 'pending';
         bookingData.bookingDate = new Date().toISOString();
         
+        // Handle seatId format (e.g., "3-3" -> table: 3, seat: 3)
+        if (bookingData.seatId && !bookingData.table) {
+            const [table, seat] = bookingData.seatId.split('-');
+            bookingData.table = parseInt(table);
+            bookingData.seat = parseInt(seat);
+        }
+        
+        // Ensure table and seat are numbers
+        if (bookingData.table) {
+            bookingData.table = parseInt(bookingData.table);
+        }
+        if (bookingData.seat) {
+            bookingData.seat = parseInt(bookingData.seat);
+        }
+        
+        // Validate required fields
+        if (!bookingData.table || !bookingData.seat) {
+            console.log('❌ Missing table or seat fields:', bookingData);
+            return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
+        }
+        
+        console.log('✅ Booking data after parsing:', {
+            id: bookingData.id,
+            seatId: bookingData.seatId,
+            table: bookingData.table,
+            seat: bookingData.seat,
+            status: bookingData.status
+        });
+        
         // Load existing bookings
         const bookingsPath = path.join(__dirname, 'bookings.json');
         let bookings = {};
