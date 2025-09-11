@@ -53,6 +53,36 @@ class AdminPanel {
         return { minX, maxX, minY, maxY };
     }
 
+    constrainToBounds() {
+        const bounds = this.getBounds();
+        this.translateX = this.clamp(this.translateX, bounds.minX, bounds.maxX);
+        this.translateY = this.clamp(this.translateY, bounds.minY, bounds.maxY);
+    }
+
+    applyMomentum(velocityX, velocityY) {
+        const friction = 0.95; // Momentum decay factor
+        const minVelocity = 0.1;
+        
+        const animate = () => {
+            if (Math.abs(velocityX) < minVelocity && Math.abs(velocityY) < minVelocity) {
+                return; // Stop animation
+            }
+            
+            this.translateX += velocityX;
+            this.translateY += velocityY;
+            
+            this.constrainToBounds();
+            this.applyTransform();
+            
+            velocityX *= friction;
+            velocityY *= friction;
+            
+            requestAnimationFrame(animate);
+        };
+        
+        requestAnimationFrame(animate);
+    }
+
     applyTransform() {
         this.hall.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
     }
@@ -73,63 +103,76 @@ class AdminPanel {
     setupTouchEvents() {
         if (!this.hall) return;
 
-        // Enhanced touch handling for better mobile experience
+        // Ticket.kg style pan/zoom implementation
         let touchStartTime = 0;
         let touchStartX = 0;
         let touchStartY = 0;
         let hasMoved = false;
-        let touchMoveThreshold = 10; // pixels
+        let touchMoveThreshold = 8; // pixels - reduced for more responsive panning
+        let lastPanTime = 0;
+        let velocityX = 0;
+        let velocityY = 0;
+        let lastPanX = 0;
+        let lastPanY = 0;
+        let isDragging = false;
 
+        // Mouse/trackpad support for desktop
+        let mouseDown = false;
+        let mouseStartX = 0;
+        let mouseStartY = 0;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        // Touch events
         this.hall.addEventListener('touchstart', (e) => {
             this.lastTouchTime = Date.now();
             touchStartTime = Date.now();
             hasMoved = false;
+            isDragging = false;
             
             if (e.touches.length === 2) {
                 this.isPinching = true;
                 this.lastDistance = this.getDistance(e.touches);
-                // choose midpoint as transform origin in element coords
+                // Set transform origin to pinch center for smooth zoom
                 const mid = this.getMidpoint(e.touches);
                 const rect = this.hall.getBoundingClientRect();
                 this.hall.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
                 e.preventDefault();
             } else if (e.touches.length === 1) {
-                // start pan
                 this.isPanning = true;
                 this.startPanX = e.touches[0].clientX - this.translateX;
                 this.startPanY = e.touches[0].clientY - this.translateY;
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
+                lastPanX = e.touches[0].clientX;
+                lastPanY = e.touches[0].clientY;
+                lastPanTime = Date.now();
             }
         }, { passive: false });
 
         this.hall.addEventListener('touchmove', (e) => {
             if (this.isPinching && e.touches.length === 2) {
                 const dist = this.getDistance(e.touches);
-                const delta = dist - this.lastDistance; // positive => fingers apart => zoom in
-                const sensitivity = 0.003; // reduced for smoother zoom
+                const delta = dist - this.lastDistance;
+                const sensitivity = 0.002; // Smoother zoom like Ticket.kg
                 const oldScale = this.scale;
                 this.scale = this.clamp(this.scale + delta * sensitivity, this.minScale, this.maxScale);
 
-                // Adjust translate so zoom focuses on pinch center:
+                // Zoom centered on pinch point
                 const mid = this.getMidpoint(e.touches);
                 const rect = this.hall.getBoundingClientRect();
                 const cx = mid.x - rect.left;
                 const cy = mid.y - rect.top;
-                // transform point math: keep midpoint stable
+                
+                // Keep pinch point stable during zoom
                 this.translateX = (this.translateX - cx) * (this.scale / oldScale) + cx;
                 this.translateY = (this.translateY - cy) * (this.scale / oldScale) + cy;
 
                 this.lastDistance = dist;
-                // clamp to bounds
-                const b = this.getBounds();
-                this.translateX = this.clamp(this.translateX, b.minX, b.maxX);
-                this.translateY = this.clamp(this.translateY, b.minY, b.maxY);
-
+                this.constrainToBounds();
                 requestAnimationFrame(() => this.applyTransform());
                 e.preventDefault();
             } else if (this.isPanning && e.touches.length === 1 && !this.isPinching) {
-                // Check if touch has moved enough to be considered a pan
                 const currentX = e.touches[0].clientX;
                 const currentY = e.touches[0].clientY;
                 const deltaX = Math.abs(currentX - touchStartX);
@@ -137,16 +180,26 @@ class AdminPanel {
                 
                 if (deltaX > touchMoveThreshold || deltaY > touchMoveThreshold) {
                     hasMoved = true;
+                    isDragging = true;
+                }
+                
+                // Calculate velocity for momentum
+                const now = Date.now();
+                const timeDelta = now - lastPanTime;
+                if (timeDelta > 0) {
+                    velocityX = (currentX - lastPanX) / timeDelta;
+                    velocityY = (currentY - lastPanY) / timeDelta;
                 }
                 
                 this.translateX = currentX - this.startPanX;
                 this.translateY = currentY - this.startPanY;
                 
-                const b = this.getBounds();
-                this.translateX = this.clamp(this.translateX, b.minX, b.maxX);
-                this.translateY = this.clamp(this.translateY, b.minY, b.maxY);
-                
+                this.constrainToBounds();
                 requestAnimationFrame(() => this.applyTransform());
+                
+                lastPanX = currentX;
+                lastPanY = currentY;
+                lastPanTime = now;
                 e.preventDefault();
             }
         }, { passive: false });
@@ -160,23 +213,79 @@ class AdminPanel {
             }
             if (e.touches.length === 0) { 
                 this.isPanning = false; 
+                
+                // Apply momentum if dragging
+                if (isDragging && Math.abs(velocityX) > 0.1 || Math.abs(velocityY) > 0.1) {
+                    this.applyMomentum(velocityX, velocityY);
+                }
             }
             
             // Set cooldown based on gesture type
             if (this.isPinching || hasMoved) {
-                this.ignoreTapUntil = Date.now() + 300; // longer cooldown for gestures
-            } else if (touchDuration < 200) {
-                this.ignoreTapUntil = Date.now() + 100; // shorter cooldown for quick taps
+                this.ignoreTapUntil = Date.now() + 250;
+            } else if (touchDuration < 150) {
+                this.ignoreTapUntil = Date.now() + 50;
             } else {
-                this.ignoreTapUntil = Date.now() + 200; // medium cooldown for longer taps
+                this.ignoreTapUntil = Date.now() + 150;
+            }
+            
+            isDragging = false;
+        });
+
+        // Mouse events for desktop
+        this.hall.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { // Left mouse button
+                mouseDown = true;
+                mouseStartX = e.clientX - this.translateX;
+                mouseStartY = e.clientY - this.translateY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                this.hall.style.cursor = 'grabbing';
+                e.preventDefault();
             }
         });
 
-        // Enhanced click/tap handler with better conflict resolution
+        this.hall.addEventListener('mousemove', (e) => {
+            if (mouseDown) {
+                this.translateX = e.clientX - mouseStartX;
+                this.translateY = e.clientY - mouseStartY;
+                this.constrainToBounds();
+                requestAnimationFrame(() => this.applyTransform());
+                e.preventDefault();
+            }
+        });
+
+        this.hall.addEventListener('mouseup', (e) => {
+            if (mouseDown) {
+                mouseDown = false;
+                this.hall.style.cursor = 'grab';
+                this.ignoreTapUntil = Date.now() + 100;
+            }
+        });
+
+        // Wheel zoom for desktop
+        this.hall.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = this.hall.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const oldScale = this.scale;
+            this.scale = this.clamp(this.scale * zoomFactor, this.minScale, this.maxScale);
+            
+            // Zoom centered on mouse position
+            this.translateX = (this.translateX - mouseX) * (this.scale / oldScale) + mouseX;
+            this.translateY = (this.translateY - mouseY) * (this.scale / oldScale) + mouseY;
+            
+            this.constrainToBounds();
+            requestAnimationFrame(() => this.applyTransform());
+        }, { passive: false });
+
+        // Enhanced click/tap handler
         this.hall.addEventListener('click', (e) => this.seatClickHandler(e));
         this.hall.addEventListener('touchend', (e) => {
-            // Only handle seat clicks if it wasn't a pan/zoom gesture
-            if (!hasMoved && !this.isPinching) {
+            if (!hasMoved && !this.isPinching && !isDragging) {
                 this.seatClickHandler(e);
             }
         }, { passive: false });

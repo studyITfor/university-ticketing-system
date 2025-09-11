@@ -571,17 +571,29 @@ body {
     overflow: hidden;
     margin: 1rem 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    transition: transform 0.1s ease-out; /* Faster transition for better responsiveness */
+    transition: transform 0.05s ease-out; /* Very smooth transitions like Ticket.kg */
     touch-action: none; /* Enable custom touch handling for pan/zoom */
     user-select: none; /* Prevent text selection during pan/zoom */
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     cursor: grab; /* Show grab cursor for panning */
+    will-change: transform; /* Optimize for smooth animations */
+    -webkit-touch-callout: none; /* Disable iOS callout */
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .hall-layout-curved:active {
     cursor: grabbing; /* Show grabbing cursor when actively panning */
+}
+
+.hall-layout-curved:hover {
+    cursor: grab; /* Ensure grab cursor on hover */
+}
+
+/* Smooth zoom transitions */
+.hall-layout-curved.zooming {
+    transition: none; /* Disable transitions during active zooming */
 }
 
 .stage-area {
@@ -1321,10 +1333,16 @@ body {
         height: 800px;
         touch-action: none; /* Enable custom touch handling for pan/zoom on mobile */
         cursor: grab; /* Show grab cursor for panning on mobile */
+        transition: transform 0.03s ease-out; /* Even smoother on mobile */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     }
     
     .hall-layout-curved:active {
         cursor: grabbing; /* Show grabbing cursor when actively panning on mobile */
+    }
+    
+    .hall-layout-curved:hover {
+        cursor: grab; /* Ensure grab cursor on hover on mobile */
     }
     
     .table-preview-curved {
