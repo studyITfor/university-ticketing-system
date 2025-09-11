@@ -265,17 +265,19 @@ body {
     backface-visibility: hidden;
 }
 
-/* Tables Layout */
+/* Tables Layout - Responsive Grid */
 .tables-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
-    padding: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
     width: 100%;
     height: 100%;
     position: absolute;
     top: 0;
     left: 0;
+    align-content: start;
+    justify-content: center;
 }
 
 .table {
@@ -299,16 +301,17 @@ body {
 
 .table {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
-    grid-gap: 8px;       /* distance between seats */
-    padding: 10px;       /* inside table */
+    grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+    grid-gap: 6px;       /* distance between seats */
+    padding: 12px;       /* inside table */
     margin-bottom: 20px; /* space between tables */
     border: 2px solid #ccc;
-    border-radius: 8px;
+    border-radius: 12px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15);
     position: relative;
     transition: all 0.3s ease;
+    min-height: 120px;
 }
 
 .table::before {
@@ -339,17 +342,20 @@ body {
 .seat {
     width: 100%;
     aspect-ratio: 1;
+    min-width: 44px;
+    min-height: 44px;
     border: 2px solid #e9ecef;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
     background: white;
     z-index: 10;
+    box-sizing: border-box;
     /* Mobile touch improvements */
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
@@ -359,6 +365,10 @@ body {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+    /* Ensure text is readable */
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 .seat:hover {
@@ -803,9 +813,22 @@ body {
         height: 500px; /* Slightly smaller on mobile */
     }
     
+    .tables-grid {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .table {
+        grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+        grid-gap: 4px;
+        padding: 10px;
+        min-height: 100px;
+    }
+    
     .seat {
-        min-width: 36px;
-        min-height: 36px;
+        min-width: 40px;
+        min-height: 40px;
         font-size: 0.8rem;
     }
     
@@ -841,18 +864,22 @@ body {
     }
     
     .tables-grid {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1.5rem;
-        padding: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
     }
     
     .table {
-        grid-gap: 12px;
-        padding: 15px;
+        grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+        grid-gap: 6px;
+        padding: 10px;
+        min-height: 110px;
     }
     
     .seat {
-        font-size: 0.9rem;
+        min-width: 42px;
+        min-height: 42px;
+        font-size: 0.8rem;
     }
     
     .bank-details {
@@ -900,17 +927,21 @@ body {
     
     .tables-grid {
         grid-template-columns: 1fr;
-        gap: 2rem;
-        padding: 1rem;
+        gap: 1rem;
+        padding: 0.5rem;
     }
     
     .table {
-        grid-gap: 14px;
-        padding: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+        grid-gap: 4px;
+        padding: 8px;
+        min-height: 100px;
     }
     
     .seat {
-        font-size: 0.8rem;
+        min-width: 38px;
+        min-height: 38px;
+        font-size: 0.75rem;
     }
     
     .legend-items {

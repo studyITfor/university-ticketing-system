@@ -522,5 +522,17 @@
     "bookingDate": "2025-09-11T18:09:15.928Z",
     "table": 1,
     "seat": 1
+  },
+  "BKMFFWCAK0": {
+    "seatId": "1-4",
+    "studentName": "Test User",
+    "studentSurname": "Test Surname",
+    "studentPhone": "+996777123456",
+    "studentEmail": "test@example.com",
+    "id": "BKMFFWCAK0",
+    "status": "pending",
+    "bookingDate": "2025-09-11T21:04:19.056Z",
+    "table": 1,
+    "seat": 4
   }
 }
