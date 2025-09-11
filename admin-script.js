@@ -10,6 +10,21 @@ class AdminPanel {
         this.zoomLevels = [50, 75, 100, 125, 150, 200]; // Available zoom levels
         this.socket = null;
         
+        // Pan/zoom state variables
+        this.hall = null; // Will be set to .hall-layout-curved element
+        this.scale = 1;
+        this.minScale = 0.6;
+        this.maxScale = 2.0;
+        this.lastDistance = null;
+        this.translateX = 0;
+        this.translateY = 0;
+        this.startPanX = 0;
+        this.startPanY = 0;
+        this.isPanning = false;
+        this.isPinching = false;
+        this.lastTouchTime = 0;
+        this.ignoreTapUntil = 0;
+        
         // Ticket verification stats
         this.verificationStats = {
             verifiedToday: 0,
@@ -18,6 +33,180 @@ class AdminPanel {
         };
         
         this.init();
+    }
+
+    // Utility functions for pan/zoom
+    clamp(v, a, b) {
+        return Math.max(a, Math.min(b, v));
+    }
+
+    getBounds() {
+        const container = this.hall.parentElement.getBoundingClientRect();
+        const content = this.hall.getBoundingClientRect();
+        const scaledWidth = (content.width) * this.scale;
+        const scaledHeight = (content.height) * this.scale;
+        // Compute min/max translate so hall does not go out of container
+        const minX = Math.min(0, container.width - scaledWidth);
+        const minY = Math.min(0, container.height - scaledHeight);
+        const maxX = 0;
+        const maxY = 0;
+        return { minX, maxX, minY, maxY };
+    }
+
+    applyTransform() {
+        this.hall.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+    }
+
+    getDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.hypot(dx, dy);
+    }
+
+    getMidpoint(touches) {
+        return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2,
+        };
+    }
+
+    setupTouchEvents() {
+        if (!this.hall) return;
+
+        // Touch events for pinch-to-zoom and pan
+        this.hall.addEventListener('touchstart', (e) => {
+            this.lastTouchTime = Date.now();
+            if (e.touches.length === 2) {
+                this.isPinching = true;
+                this.lastDistance = this.getDistance(e.touches);
+                // choose midpoint as transform origin in element coords
+                const mid = this.getMidpoint(e.touches);
+                const rect = this.hall.getBoundingClientRect();
+                this.hall.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
+                e.preventDefault();
+            } else if (e.touches.length === 1) {
+                // start pan
+                this.isPanning = true;
+                this.startPanX = e.touches[0].clientX - this.translateX;
+                this.startPanY = e.touches[0].clientY - this.translateY;
+            }
+        }, { passive: false });
+
+        this.hall.addEventListener('touchmove', (e) => {
+            if (this.isPinching && e.touches.length === 2) {
+                const dist = this.getDistance(e.touches);
+                const delta = dist - this.lastDistance; // positive => fingers apart => zoom in
+                const sensitivity = 0.004; // tuneable
+                const oldScale = this.scale;
+                this.scale = this.clamp(this.scale + delta * sensitivity, this.minScale, this.maxScale);
+
+                // Adjust translate so zoom focuses on pinch center:
+                const mid = this.getMidpoint(e.touches);
+                const rect = this.hall.getBoundingClientRect();
+                const cx = mid.x - rect.left;
+                const cy = mid.y - rect.top;
+                // transform point math: keep midpoint stable
+                this.translateX = (this.translateX - cx) * (this.scale / oldScale) + cx;
+                this.translateY = (this.translateY - cy) * (this.scale / oldScale) + cy;
+
+                this.lastDistance = dist;
+                // clamp to bounds
+                const b = this.getBounds();
+                this.translateX = this.clamp(this.translateX, b.minX, b.maxX);
+                this.translateY = this.clamp(this.translateY, b.minY, b.maxY);
+
+                requestAnimationFrame(() => this.applyTransform());
+                e.preventDefault();
+            } else if (this.isPanning && e.touches.length === 1 && !this.isPinching) {
+                this.translateX = e.touches[0].clientX - this.startPanX;
+                this.translateY = e.touches[0].clientY - this.startPanY;
+                const b = this.getBounds();
+                this.translateX = this.clamp(this.translateX, b.minX, b.maxX);
+                this.translateY = this.clamp(this.translateY, b.minY, b.maxY);
+                requestAnimationFrame(() => this.applyTransform());
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        this.hall.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) { 
+                this.isPinching = false; 
+                this.lastDistance = null; 
+            }
+            if (e.touches.length === 0) { 
+                this.isPanning = false; 
+            }
+            this.ignoreTapUntil = Date.now() + 250; // short cooldown after gestures
+        });
+
+        // Robust click/tap handler with cooldown and authoritative status check
+        this.hall.addEventListener('click', (e) => this.seatClickHandler(e));
+        this.hall.addEventListener('touchend', (e) => this.seatClickHandler(e), { passive: false });
+    }
+
+    seatClickHandler(e) {
+        const now = Date.now();
+        if (now < this.ignoreTapUntil) {
+            // ignore accidental taps during/shortly after a gesture
+            e.preventDefault();
+            return;
+        }
+        const seatEl = e.target.closest('.seat-preview-curved');
+        if (!seatEl) return;
+        
+        // Prefer authoritative status from data-* attribute that the server controls
+        const status = seatEl.dataset.status || seatEl.getAttribute('data-status') || 
+                     (seatEl.classList.contains('booked') ? 'booked' : 'available');
+        
+        if (status === 'booked' || status === 'paid' || status === 'reserved') {
+            // show an "already booked/paid" modal. Do NOT open booking form.
+            this.showAlreadyBookedModal(seatEl);
+            e.preventDefault();
+            return;
+        }
+        this.showSeatInfo(seatEl.dataset.seatId);
+    }
+
+    showAlreadyBookedModal(seatEl) {
+        const seatId = seatEl.dataset.seatId;
+        const [table, seat] = seatId.split('-');
+        const booking = Object.values(this.bookings).find(b => 
+            b.table == table && b.seat == seat && b.status !== 'cancelled'
+        );
+        
+        let status = 'Забронировано';
+        let message = 'Это место уже забронировано и оплачено.';
+        
+        if (booking) {
+            status = this.getStatusText(booking.status);
+            if (booking.status === 'pending') {
+                message = 'Это место забронировано, но еще не оплачено.';
+            } else if (booking.status === 'paid' || booking.status === 'confirmed') {
+                message = `Это место забронировано и оплачено пользователем ${booking.firstName} ${booking.lastName}.`;
+            }
+        }
+        
+        // Create and show modal
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3>Место ${table}-${seat}</h3>
+                <p><strong>Статус:</strong> ${status}</p>
+                <p>${message}</p>
+                <button class="btn btn-primary" onclick="this.closest('.modal').remove()">ОК</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (modal.parentNode) {
+                modal.remove();
+            }
+        }, 5000);
     }
 
     init() {
@@ -633,6 +822,12 @@ class AdminPanel {
 
         container.appendChild(hallLayout);
         
+        // Initialize hall element for pan/zoom
+        this.hall = hallLayout.querySelector('.hall-layout-curved');
+        if (this.hall) {
+            this.setupTouchEvents();
+        }
+        
         // Apply current zoom level
         this.applyZoom();
     }
@@ -681,13 +876,10 @@ class AdminPanel {
             seatElement.style.left = `${x}%`;
             seatElement.style.top = `${y}%`;
 
-            // Set seat status
+            // Set seat status and data attributes
             this.updateSeatStatus(seatElement, `${tableNumber}-${seat}`);
-
-            seatElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.showSeatInfo(`${tableNumber}-${seat}`);
-            });
+            seatElement.dataset.seatId = `${tableNumber}-${seat}`;
+            seatElement.dataset.status = 'available'; // Default status
 
             seatsContainer.appendChild(seatElement);
         }
@@ -745,17 +937,24 @@ class AdminPanel {
         // Reset classes
         seatElement.className = 'seat-curved';
 
+        let status = 'available';
         if (booking) {
             if (booking.status === 'paid' || booking.status === 'Оплачен') {
                 seatElement.classList.add('booked');
+                status = 'booked';
             } else if (booking.status === 'pending' || booking.status === 'awaiting confirmation') {
                 seatElement.classList.add('pending');
+                status = 'pending';
             }
         } else if (this.prebookedSeats.has(seatId)) {
             seatElement.classList.add('prebooked');
+            status = 'prebooked';
         } else {
             seatElement.classList.add('available');
         }
+        
+        // Set data-status attribute for authoritative status
+        seatElement.dataset.status = status;
     }
 
     // Zoom functionality
@@ -804,7 +1003,13 @@ class AdminPanel {
         const curvedLayout = hallPreview.querySelector('.hall-layout-curved');
         if (curvedLayout) {
             const scale = this.zoomLevel / 100;
-            curvedLayout.style.transform = `scale(${scale})`;
+            // Update our pan/zoom state
+            this.scale = scale;
+            this.translateX = 0;
+            this.translateY = 0;
+            
+            // Apply combined transform
+            curvedLayout.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
             curvedLayout.style.transformOrigin = 'center center';
             curvedLayout.style.transition = 'transform 0.3s ease';
             
@@ -1711,6 +1916,25 @@ ID бронирования: ${bookingId}
                 } else if (data.type === 'booking-deleted') {
                     console.log('📡 Booking deleted by another admin:', data.data);
                     this.showNotification(`Бронирование удалено: ${data.data.firstName} ${data.data.lastName} - Стол ${data.data.table}, Место ${data.data.seat}`, 'warning');
+                }
+                
+                // Update individual seat status if provided
+                if (data.seatId && data.status) {
+                    const seatElement = document.querySelector(`[data-seat-id="${data.seatId}"]`);
+                    if (seatElement) {
+                        seatElement.dataset.status = data.status;
+                        // Update CSS classes based on status
+                        seatElement.classList.remove('booked', 'pending', 'prebooked', 'available');
+                        if (data.status === 'booked' || data.status === 'paid' || data.status === 'reserved') {
+                            seatElement.classList.add('booked');
+                        } else if (data.status === 'pending') {
+                            seatElement.classList.add('pending');
+                        } else if (data.status === 'prebooked') {
+                            seatElement.classList.add('prebooked');
+                        } else {
+                            seatElement.classList.add('available');
+                        }
+                    }
                 }
                 
                 // Refresh admin data to show latest changes

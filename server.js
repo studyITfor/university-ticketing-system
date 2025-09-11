@@ -109,6 +109,15 @@ function emitSeatUpdate() {
         
         io.emit('seatUpdate', updateData);
         
+        // Also emit individual seat status updates for real-time updates
+        Object.entries(seatStatuses).forEach(([seatId, status]) => {
+            io.emit('update-seat-status', {
+                seatId: seatId,
+                status: status,
+                timestamp: Date.now()
+            });
+        });
+        
         console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
         console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
         console.log(`📊 Status distribution:`, statusCounts);
@@ -857,6 +866,14 @@ app.post('/api/create-booking', async (req, res) => {
             timestamp: Date.now()
         });
         
+        // Emit individual seat status update
+        const seatId = `${bookingData.table}-${bookingData.seat}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'pending',
+            timestamp: Date.now()
+        });
+        
         console.log(`📡 API booking created broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
@@ -952,6 +969,14 @@ app.post('/api/confirm-payment', async (req, res) => {
             timestamp: Date.now()
         });
         
+        // Emit individual seat status update
+        const seatId = `${booking.table}-${booking.seat}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'booked',
+            timestamp: Date.now()
+        });
+        
         console.log(`📡 Payment confirmed broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
@@ -1017,6 +1042,14 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
                 firstName: deletedBooking.firstName,
                 lastName: deletedBooking.lastName
             },
+            timestamp: Date.now()
+        });
+        
+        // Emit individual seat status update
+        const seatId = `${deletedBooking.table}-${deletedBooking.seat}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'available',
             timestamp: Date.now()
         });
         
