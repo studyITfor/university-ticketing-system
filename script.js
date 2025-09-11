@@ -126,6 +126,9 @@ class StudentTicketingSystem {
                 this.pinchOriginX = coords.ex;
                 this.pinchOriginY = coords.ey;
                 
+                // Add visual feedback class
+                hallContent.classList.add('zooming');
+                
                 console.log('📱 Pinch gesture started - distance:', distance, 'center:', midX, midY);
                 e.preventDefault(); // Prevent browser pinch zoom
             } else if (this.touches.length === 1) {
@@ -149,7 +152,7 @@ class StudentTicketingSystem {
                 
                 if (this.lastDistance != null) {
                     const delta = distance - this.lastDistance; // positive => fingers apart => zoom in
-                    const sensitivity = 0.004;
+                    const sensitivity = 0.003; // Reduced sensitivity for smoother zoom
                     const newScale = Math.max(0.6, Math.min(2.0, this.currentZoom + delta * sensitivity));
                     
                     // Update transform origin to current midpoint for natural zooming
@@ -173,10 +176,11 @@ class StudentTicketingSystem {
                 const deltaY = touch.clientY - this.panStartY;
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 
-                // Start panning if movement exceeds threshold
-                if (distance > this.dragThreshold && !this.isPanning) {
+                // Start panning if movement exceeds threshold (reduced for more responsive panning)
+                if (distance > 5 && !this.isPanning) {
                     this.isPanning = true;
                     this.recentlyPanned = true;
+                    hallContent.classList.add('panning');
                     console.log('📱 Pan gesture started - distance:', distance);
                 }
                 
@@ -213,6 +217,7 @@ class StudentTicketingSystem {
                 this.isPinching = false;
                 this.lastDistance = null;
                 this.recentlyPinched = true;
+                hallContent.classList.remove('zooming');
                 
                 // Reset recentlyPinched flag after cooldown
                 setTimeout(() => {
@@ -224,6 +229,7 @@ class StudentTicketingSystem {
             if (this.touches.length === 0) {
                 this.isPanning = false;
                 this.recentlyPanned = true;
+                hallContent.classList.remove('panning');
                 
                 // Reset recentlyPanned flag after cooldown
                 setTimeout(() => {
@@ -1868,12 +1874,19 @@ Socket.IO Diagnostics:
                 event.stopPropagation();
             }
             
-            // Check if seat is available for booking
-            if (seatElement.classList.contains('booked') || 
+            // Check if seat is available for booking - check both classes and data-status
+            const seatStatus = seatElement.dataset.status || 'active';
+            const isUnavailable = seatElement.classList.contains('booked') || 
                 seatElement.classList.contains('reserved') ||
                 seatElement.classList.contains('prebooked') ||
-                seatElement.classList.contains('pending')) {
-                console.log('❌ Seat is not available for booking');
+                seatElement.classList.contains('pending') ||
+                seatStatus === 'booked' ||
+                seatStatus === 'reserved' ||
+                seatStatus === 'paid' ||
+                seatStatus === 'pending';
+                
+            if (isUnavailable) {
+                console.log('❌ Seat is not available for booking, status:', seatStatus);
                 this.showSeatStatusModal(table, seat, seatElement.classList);
                 return;
             }
@@ -1899,18 +1912,32 @@ Socket.IO Diagnostics:
     
     // Show seat status modal for unavailable seats
     showSeatStatusModal(table, seat, classList) {
+        // Find the seat element to get its current status
+        const seatElement = document.querySelector(`.seat[data-table="${table}"][data-seat="${seat}"]`);
+        const seatStatus = seatElement ? seatElement.dataset.status : 'active';
+        
         let status = 'Available';
         let message = 'Это место доступно для бронирования.';
         
-        if (classList.contains('booked')) {
+        // Check data-status first (authoritative from server)
+        if (seatStatus === 'booked' || seatStatus === 'reserved' || seatStatus === 'paid') {
             status = 'Забронировано';
-            message = 'Это место уже забронировано и оплачено.';
+            message = 'Это место недоступно для бронирования.';
+        } else if (seatStatus === 'pending') {
+            status = 'Ожидает оплаты';
+            message = 'Это место недоступно для бронирования.';
+        } else if (classList.contains('booked') || classList.contains('reserved')) {
+            status = 'Забронировано';
+            message = 'Это место недоступно для бронирования.';
         } else if (classList.contains('prebooked')) {
             status = 'Предварительно забронировано';
-            message = 'Это место предварительно забронировано администратором.';
+            message = 'Это место недоступно для бронирования.';
         } else if (classList.contains('pending')) {
             status = 'Ожидает оплаты';
-            message = 'Это место забронировано, но еще не оплачено.';
+            message = 'Это место недоступно для бронирования.';
+        } else if (classList.contains('active') || classList.contains('available') || seatStatus === 'active') {
+            status = 'Свободно';
+            message = 'Это место доступно для бронирования.';
         }
         
         // Create and show modal

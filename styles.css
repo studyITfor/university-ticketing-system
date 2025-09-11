@@ -237,6 +237,17 @@ body {
     user-select: none;
 }
 
+/* Visual feedback for panning and zooming */
+.hall-content.panning {
+    cursor: grabbing !important;
+    transition: none; /* Disable transitions during panning for smooth movement */
+}
+
+.hall-content.zooming {
+    cursor: zoom-in !important;
+    transition: none; /* Disable transitions during zooming for smooth scaling */
+}
+
 /* Tables Layout */
 .tables-grid {
     display: grid;
