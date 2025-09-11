@@ -572,6 +572,7 @@ body {
     margin: 1rem 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease;
+    touch-action: none; /* Enable custom touch handling for pan/zoom */
 }
 
 .stage-area {
@@ -1309,6 +1310,7 @@ body {
     /* Mobile curved layout */
     .hall-layout-curved {
         height: 800px;
+        touch-action: none; /* Enable custom touch handling for pan/zoom on mobile */
     }
     
     .table-preview-curved {

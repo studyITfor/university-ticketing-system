@@ -823,7 +823,7 @@ class AdminPanel {
         container.appendChild(hallLayout);
         
         // Initialize hall element for pan/zoom
-        this.hall = hallLayout.querySelector('.hall-layout-curved');
+        this.hall = hallLayout; // hallLayout is already the .hall-layout-curved element
         if (this.hall) {
             this.setupTouchEvents();
         }
@@ -980,17 +980,23 @@ class AdminPanel {
     }
 
     applyZoom() {
-        const hallPreview = document.getElementById('hallLayoutPreview');
         const zoomLevelElement = document.getElementById('zoomLevel');
         
-        // Remove all zoom classes
-        hallPreview.classList.remove('zoom-50', 'zoom-75', 'zoom-100', 'zoom-125', 'zoom-150', 'zoom-200');
+        // Convert zoom level percentage to scale (100% = 1.0)
+        this.scale = this.zoomLevel / 100;
         
-        // Add current zoom class
-        hallPreview.classList.add(`zoom-${this.zoomLevel}`);
+        // Clamp scale to min/max bounds
+        this.scale = this.clamp(this.scale, this.minScale, this.maxScale);
+        
+        // Apply the combined transform (pan + zoom)
+        if (this.hall) {
+            this.applyTransform();
+        }
         
         // Update zoom level display
-        zoomLevelElement.textContent = `${this.zoomLevel}%`;
+        if (zoomLevelElement) {
+            zoomLevelElement.textContent = `${this.zoomLevel}%`;
+        }
         
         // Update button states
         const zoomInBtn = document.getElementById('zoomIn');

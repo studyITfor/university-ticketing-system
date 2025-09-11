@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Pan/Zoom Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .test-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .hall-container {
+            width: 100%;
+            height: 400px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            background: #f9f9f9;
+        }
+        
+        .hall-content {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-origin: center center;
+            transition: transform 0.1s ease;
+        }
+        
+        .test-seat {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #4CAF50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+        }
+        
+        .test-seat.booked {
+            background: #FF4C4C;
+        }
+        
+        .test-seat.pending {
+            background: #FFD700;
+            color: #333;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mobile Pan/Zoom Test</h1>
+    
+    <div class="test-container">
+        <h3>Test Instructions:</h3>
+        <ol>
+            <li>Use one finger to pan/drag around the hall</li>
+            <li>Use two fingers to pinch-to-zoom</li>
+            <li>Tap on seats to test click handling</li>
+            <li>Check console for debug logs</li>
+        </ol>
+    </div>
+    
+    <div class="test-container">
+        <div class="controls">
+            <button class="btn" onclick="resetView()">Reset View</button>
+            <button class="btn" onclick="addTestBooking()">Add Test Booking</button>
+            <button class="btn" onclick="clearTestBookings()">Clear Bookings</button>
+        </div>
+        
+        <div class="hall-container" id="hallContainer">
+            <div class="hall-content" id="hallContent">
+                <!-- Seats will be generated here -->
+            </div>
+        </div>
+        
+        <div class="status" id="status">
+            Scale: 1.0 | Pan: (0, 0) | Seats: 0 booked
+        </div>
+    </div>
+
+    <script>
+        // Pan/zoom state variables
+        const hall = document.getElementById('hallContent');
+        let scale = 1;
+        let minScale = 0.6;
+        let maxScale = 2.0;
+        let lastDistance = null;
+        let translateX = 0;
+        let translateY = 0;
+        let startPanX = 0;
+        let startPanY = 0;
+        let isPanning = false;
+        let isPinching = false;
+        let lastTouchTime = 0;
+        let ignoreTapUntil = 0;
+        let bookedSeats = new Set();
+
+        // Utility functions
+        function clamp(v, a, b) {
+            return Math.max(a, Math.min(b, v));
+        }
+
+        function getBounds() {
+            const container = hall.parentElement.getBoundingClientRect();
+            const content = hall.getBoundingClientRect();
+            const scaledWidth = (content.width) * scale;
+            const scaledHeight = (content.height) * scale;
+            const minX = Math.min(0, container.width - scaledWidth);
+            const minY = Math.min(0, container.height - scaledHeight);
+            const maxX = 0;
+            const maxY = 0;
+            return { minX, maxX, minY, maxY };
+        }
+
+        function applyTransform() {
+            hall.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            updateStatus();
+        }
+
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+
+        function getMidpoint(touches) {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2,
+            };
+        }
+
+        function updateStatus() {
+            document.getElementById('status').textContent = 
+                `Scale: ${scale.toFixed(2)} | Pan: (${Math.round(translateX)}, ${Math.round(translateY)}) | Seats: ${bookedSeats.size} booked`;
+        }
+
+        // Touch event handlers
+        hall.addEventListener('touchstart', (e) => {
+            lastTouchTime = Date.now();
+            if (e.touches.length === 2) {
+                isPinching = true;
+                lastDistance = getDistance(e.touches);
+                const mid = getMidpoint(e.touches);
+                const rect = hall.getBoundingClientRect();
+                hall.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
+                e.preventDefault();
+                console.log('📱 Pinch started');
+            } else if (e.touches.length === 1) {
+                isPanning = true;
+                startPanX = e.touches[0].clientX - translateX;
+                startPanY = e.touches[0].clientY - translateY;
+                console.log('📱 Pan started');
+            }
+        }, { passive: false });
+
+        hall.addEventListener('touchmove', (e) => {
+            if (isPinching && e.touches.length === 2) {
+                const dist = getDistance(e.touches);
+                const delta = dist - lastDistance;
+                const sensitivity = 0.004;
+                const oldScale = scale;
+                scale = clamp(scale + delta * sensitivity, minScale, maxScale);
+
+                const mid = getMidpoint(e.touches);
+                const rect = hall.getBoundingClientRect();
+                const cx = mid.x - rect.left;
+                const cy = mid.y - rect.top;
+                translateX = (translateX - cx) * (scale / oldScale) + cx;
+                translateY = (translateY - cy) * (scale / oldScale) + cy;
+
+                lastDistance = dist;
+                const b = getBounds();
+                translateX = clamp(translateX, b.minX, b.maxX);
+                translateY = clamp(translateY, b.minY, b.maxY);
+
+                requestAnimationFrame(applyTransform);
+                e.preventDefault();
+                console.log('📱 Pinch move - scale:', scale.toFixed(2));
+            } else if (isPanning && e.touches.length === 1 && !isPinching) {
+                translateX = e.touches[0].clientX - startPanX;
+                translateY = e.touches[0].clientY - startPanY;
+                const b = getBounds();
+                translateX = clamp(translateX, b.minX, b.maxX);
+                translateY = clamp(translateY, b.minY, b.maxY);
+                requestAnimationFrame(applyTransform);
+                e.preventDefault();
+                console.log('📱 Pan move - translate:', Math.round(translateX), Math.round(translateY));
+            }
+        }, { passive: false });
+
+        hall.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) { 
+                isPinching = false; 
+                lastDistance = null; 
+            }
+            if (e.touches.length === 0) { 
+                isPanning = false; 
+            }
+            ignoreTapUntil = Date.now() + 250;
+        });
+
+        // Seat click handler
+        hall.addEventListener('click', seatClickHandler);
+        hall.addEventListener('touchend', seatClickHandler, { passive: false });
+
+        function seatClickHandler(e) {
+            const now = Date.now();
+            if (now < ignoreTapUntil) {
+                e.preventDefault();
+                return;
+            }
+            const seatEl = e.target.closest('.test-seat');
+            if (!seatEl) return;
+            
+            const seatId = seatEl.dataset.seatId;
+            const status = seatEl.dataset.status || 'available';
+            
+            console.log('🪑 Seat clicked:', seatId, 'Status:', status);
+            
+            if (status === 'booked' || status === 'pending') {
+                alert(`Seat ${seatId} is already ${status}!`);
+                e.preventDefault();
+                return;
+            }
+            
+            // Toggle booking
+            if (bookedSeats.has(seatId)) {
+                bookedSeats.delete(seatId);
+                seatEl.classList.remove('booked');
+                seatEl.dataset.status = 'available';
+                console.log('✅ Seat unbooked:', seatId);
+            } else {
+                bookedSeats.add(seatId);
+                seatEl.classList.add('booked');
+                seatEl.dataset.status = 'booked';
+                console.log('✅ Seat booked:', seatId);
+            }
+            updateStatus();
+        }
+
+        // Generate test seats
+        function generateSeats() {
+            hall.innerHTML = '';
+            for (let i = 1; i <= 20; i++) {
+                const seat = document.createElement('div');
+                seat.className = 'test-seat';
+                seat.dataset.seatId = `seat-${i}`;
+                seat.dataset.status = 'available';
+                seat.textContent = i;
+                
+                // Position seats in a grid
+                const row = Math.floor((i - 1) / 5);
+                const col = (i - 1) % 5;
+                seat.style.left = `${20 + col * 60}px`;
+                seat.style.top = `${20 + row * 60}px`;
+                
+                hall.appendChild(seat);
+            }
+        }
+
+        // Control functions
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+            console.log('🔄 View reset');
+        }
+
+        function addTestBooking() {
+            const randomSeat = Math.floor(Math.random() * 20) + 1;
+            const seatId = `seat-${randomSeat}`;
+            const seatEl = document.querySelector(`[data-seat-id="${seatId}"]`);
+            if (seatEl && !bookedSeats.has(seatId)) {
+                bookedSeats.add(seatId);
+                seatEl.classList.add('booked');
+                seatEl.dataset.status = 'booked';
+                updateStatus();
+                console.log('✅ Test booking added:', seatId);
+            }
+        }
+
+        function clearTestBookings() {
+            bookedSeats.clear();
+            document.querySelectorAll('.test-seat').forEach(seat => {
+                seat.classList.remove('booked', 'pending');
+                seat.dataset.status = 'available';
+            });
+            updateStatus();
+            console.log('🗑️ All test bookings cleared');
+        }
+
+        // Initialize
+        generateSeats();
+        updateStatus();
+        console.log('🎯 Mobile pan/zoom test initialized');
+    </script>
+</body>
+</html>
