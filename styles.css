@@ -171,98 +171,16 @@ body {
     font-size: 1.5rem;
 }
 
-/* Zoom Controls */
-.zoom-controls {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    z-index: 10;
-}
-
-.zoom-btn {
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-    color: #667eea;
-    font-size: 1.2rem;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-}
-
-.zoom-btn:hover {
-    background: #667eea;
-    color: white;
-    transform: scale(1.1);
-}
-
-/* Hall Layout */
-.hall-layout {
+/* Tables Container - Static Layout */
+.tables-container {
     width: 100%;
-    height: 600px;
-    border: 2px solid #e9ecef;
-    border-radius: 15px;
-    overflow: hidden;
-    position: relative;
-    background: #f8f9fa;
-    cursor: grab;
-    touch-action: none; /* Prevent default touch behaviors for custom pinch handling */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-.hall-layout:active {
-    cursor: grabbing;
-}
-
-.hall-content {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    transform-origin: center center;
-    transition: transform 0.1s ease; /* Faster transition for better touch responsiveness */
-    will-change: transform; /* Optimize for transform animations */
-    
-    /* Touch handling for pinch-to-zoom */
-    touch-action: none; /* Disable browser pinch zoom, use custom implementation */
-    -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-}
-
-/* Visual feedback for panning and zooming */
-.hall-content.panning {
-    cursor: grabbing !important;
-    transition: none; /* Disable transitions during panning for smooth movement */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-.hall-content.zooming {
-    cursor: zoom-in !important;
-    transition: none; /* Disable transitions during zooming for smooth scaling */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-
-/* Smooth momentum panning */
-.hall-content {
-    -webkit-transform: translateZ(0); /* Hardware acceleration */
-    transform: translateZ(0);
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
+    padding: 20px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    align-content: start;
+    justify-content: center;
+    margin: 20px 0;
 }
 
 /* Tables Layout - Responsive Grid */
@@ -809,11 +727,7 @@ body {
 /* Mobile Touch Improvements */
 @media (hover: none) and (pointer: coarse) {
     /* Mobile devices with touch screens */
-    .hall-layout {
-        height: 500px; /* Slightly smaller on mobile */
-    }
-    
-    .tables-grid {
+    .tables-container {
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 1rem;
         padding: 1rem;
@@ -835,20 +749,6 @@ body {
     .table-circle {
         width: 100px;
         height: 100px;
-    }
-    
-    .zoom-controls {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        flex-direction: row;
-        gap: 10px;
-    }
-    
-    .zoom-btn {
-        width: 50px;
-        height: 50px;
-        font-size: 1.4rem;
     }
 }
 
@@ -902,16 +802,6 @@ body {
         flex-direction: column;
     }
     
-    .zoom-controls {
-        position: relative;
-        flex-direction: row;
-        justify-content: center;
-        margin-bottom: 1rem;
-    }
-    
-    .hall-layout {
-        height: 400px;
-    }
 }
 
 @media (max-width: 480px) {

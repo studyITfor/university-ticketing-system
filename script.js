@@ -9,32 +9,6 @@ class StudentTicketingSystem {
         this.bookedSeats = new Set();
         this.prebookedSeats = new Set();
         this.pendingSeats = new Set();
-        this.currentZoom = 1;
-        this.currentPanX = 0;
-        this.currentPanY = 0;
-        this.isDragging = false;
-        this.dragStart = { x: 0, y: 0 };
-        
-        // Pinch-to-zoom properties
-        this.isPinching = false;
-        this.lastDistance = null;
-        this.pinchOriginX = undefined;
-        this.pinchOriginY = undefined;
-        this.recentlyPinched = false;
-        
-        // Pan/drag properties
-        this.isPanning = false;
-        this.panStartX = 0;
-        this.panStartY = 0;
-        this.lastPanX = 0;
-        this.lastPanY = 0;
-        this.recentlyPanned = false;
-        
-        // Momentum/inertia properties for smooth panning
-        this.velocityX = 0;
-        this.velocityY = 0;
-        this.lastPanTime = 0;
-        this.momentumAnimationId = null;
         
         this.currentBookingSeat = null;
         this.tempBookingData = null;
@@ -46,17 +20,11 @@ class StudentTicketingSystem {
         // Touch handling for mobile seat selection
         this.touchStartTime = 0;
         this.touchStartPosition = { x: 0, y: 0 };
-        this.dragThreshold = 3; // pixels of movement before considering it a drag (reduced for more responsive panning)
+        this.dragThreshold = 10; // pixels of movement before considering it a drag
         this.touchedSeat = null; // Track which seat was touched
         this.pointerDownSeat = null; // Track which seat had pointer down
         this.pointerStartTime = 0;
         this.pointerStartPosition = { x: 0, y: 0 };
-        
-        // Touch/pinch zoom properties
-        this.touches = [];
-        this.lastTouchDistance = 0;
-        this.isPinching = false;
-        this.lastPinchCenter = { x: 0, y: 0 };
         
         // Cooldown for preventing accidental taps after gestures
         this.ignoreTapUntil = 0;
@@ -73,47 +41,26 @@ class StudentTicketingSystem {
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
         
-        // Add window resize listener to recalculate seat positions
-        window.addEventListener('resize', () => {
-            this.recalculateSeatPositions();
-        });
         
         // Debug: Validation testing removed to prevent automatic alerts
     }
 
     setupEventListeners() {
-        // Zoom controls
-        document.getElementById('zoomIn').addEventListener('click', () => this.zoomIn());
-        document.getElementById('zoomOut').addEventListener('click', () => this.zoomOut());
-        document.getElementById('resetZoom').addEventListener('click', () => this.resetZoom());
-
-        // Hall layout pan and zoom
-        const hallLayout = document.getElementById('hallLayout');
-        hallLayout.addEventListener('mousedown', (e) => this.startDrag(e));
-        hallLayout.addEventListener('mousemove', (e) => this.drag(e));
-        hallLayout.addEventListener('mouseup', () => this.endDrag());
-        hallLayout.addEventListener('wheel', (e) => this.handleWheel(e));
-        
-        // Touch events are now handled on hallContent for better seat selection
-
         // Seat selection - comprehensive event support for all devices
-        const hallContent = document.getElementById('hallContent');
+        const tablesContainer = document.getElementById('tablesContainer');
         
         // Click events for desktop
-        hallContent.addEventListener('click', (e) => {
+        tablesContainer.addEventListener('click', (e) => {
             if (e.target.classList.contains('seat') && Date.now() > this.ignoreTapUntil) {
                 console.log('🖱️ Desktop seat click detected:', e.target);
                 this.handleSeatClick(e.target, e);
             }
         });
         
-        // Touch events for mobile - unified pinch-to-zoom, pan/drag, and seat selection
-        hallContent.addEventListener('touchstart', (e) => {
-            this.touches = Array.from(e.touches);
-            
+        // Touch events for mobile seat selection
+        tablesContainer.addEventListener('touchstart', (e) => {
             if (e.target.classList.contains('seat')) {
                 console.log('📱 Mobile touch start on seat:', e.target);
-                // Store the seat element for potential tap handling
                 this.touchedSeat = e.target;
                 this.touchStartTime = Date.now();
                 this.touchStartPosition = {
@@ -121,152 +68,10 @@ class StudentTicketingSystem {
                     y: e.touches[0].clientY
                 };
             }
-            
-            // Handle pinch-to-zoom initialization
-            if (this.touches.length === 2) {
-                this.isPinching = true;
-                this.isPanning = false;
-                this.recentlyPinched = false;
-                const { distance, midX, midY } = this.getDistanceAndMidpoint(this.touches);
-                this.lastDistance = distance;
-                this.lastPinchCenter = { x: midX, y: midY };
-                
-                // Set transform origin to pinch center
-                const coords = this.screenToElementCoords(midX, midY, hallContent);
-                this.pinchOriginX = coords.ex;
-                this.pinchOriginY = coords.ey;
-                
-                // Add visual feedback class
-                hallContent.classList.add('zooming');
-                
-                console.log('📱 Pinch gesture started - distance:', distance, 'center:', midX, midY);
-                e.preventDefault(); // Prevent browser pinch zoom
-            } else if (this.touches.length === 1) {
-                // Single touch - prepare for potential pan/drag
-                this.isPanning = false;
-                this.panStartX = e.touches[0].clientX;
-                this.panStartY = e.touches[0].clientY;
-                this.lastPanX = this.currentPanX;
-                this.lastPanY = this.currentPanY;
-                
-                console.log('📱 Single touch start - preparing for pan/drag');
-            }
-        }, { passive: false });
+        }, { passive: true });
         
-        hallContent.addEventListener('touchmove', (e) => {
-            this.touches = Array.from(e.touches);
-            
-            // Handle pinch-to-zoom
-            if (this.touches.length === 2 && this.isPinching) {
-                const { distance, midX, midY } = this.getDistanceAndMidpoint(this.touches);
-                
-                if (this.lastDistance != null) {
-                    const delta = distance - this.lastDistance; // positive => fingers apart => zoom in
-                    const sensitivity = 0.003; // Reduced sensitivity for smoother zoom
-                    const newScale = Math.max(0.6, Math.min(2.0, this.currentZoom + delta * sensitivity));
-                    
-                    // Update transform origin to current midpoint for natural zooming
-                    const coords = this.screenToElementCoords(midX, midY, hallContent);
-                    this.pinchOriginX = coords.ex;
-                    this.pinchOriginY = coords.ey;
-                    
-                    this.currentZoom = newScale;
-                    this.updateTransform();
-                    
-                    console.log('📱 Pinch move - delta:', delta, 'new scale:', newScale, 'origin:', coords);
-                }
-                
-                this.lastDistance = distance;
-                this.lastPinchCenter = { x: midX, y: midY };
-                e.preventDefault(); // Prevent browser pinch zoom
-            } else if (this.touches.length === 1 && !this.isPinching) {
-                // Handle single-finger pan/drag - works in ALL directions
-                const touch = this.touches[0];
-                const deltaX = touch.clientX - this.panStartX;
-                const deltaY = touch.clientY - this.panStartY;
-                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                
-                // Start panning if movement exceeds threshold - works in all directions
-                if (distance > 2 && !this.isPanning) {
-                    this.isPanning = true;
-                    this.recentlyPanned = true;
-                    hallContent.classList.add('panning');
-                    console.log('📱 Pan gesture started - distance:', distance, 'deltaX:', deltaX, 'deltaY:', deltaY);
-                }
-                
-                if (this.isPanning) {
-                    // Calculate new pan position
-                    const newPanX = this.lastPanX + deltaX;
-                    const newPanY = this.lastPanY + deltaY;
-                    
-                    // Apply boundaries to prevent panning out of view
-                    const hallLayout = document.getElementById('hallLayout');
-                    const hallContent = document.getElementById('hallContent');
-                    const layoutRect = hallLayout.getBoundingClientRect();
-                    const contentRect = hallContent.getBoundingClientRect();
-                    
-                    // Calculate boundaries based on zoom level
-                    const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
-                    const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
-                    
-                    this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, newPanX));
-                    this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, newPanY));
-                    
-                    // Calculate velocity for momentum
-                    const currentTime = Date.now();
-                    const timeDelta = currentTime - this.lastPanTime;
-                    if (timeDelta > 0) {
-                        this.velocityX = deltaX / timeDelta;
-                        this.velocityY = deltaY / timeDelta;
-                    }
-                    this.lastPanTime = currentTime;
-                    
-                    this.updateTransform();
-                    
-                    console.log('📱 Pan move - deltaX:', deltaX, 'deltaY:', deltaY, 'currentPanX:', this.currentPanX, 'currentPanY:', this.currentPanY);
-                }
-                
-                e.preventDefault(); // Prevent scrolling
-            }
-        }, { passive: false });
-        
-        hallContent.addEventListener('touchend', (e) => {
-            // Reset pinch state
-            if (this.touches.length < 2) {
-                this.isPinching = false;
-                this.lastDistance = null;
-                this.recentlyPinched = true;
-                hallContent.classList.remove('zooming');
-                
-                // Reset recentlyPinched flag after cooldown
-                setTimeout(() => {
-                    this.recentlyPinched = false;
-                }, 300);
-            }
-            
-            // Reset pan state
-            if (this.touches.length === 0) {
-                this.isPanning = false;
-                this.recentlyPanned = true;
-                hallContent.classList.remove('panning');
-                
-                // Start momentum animation if there's velocity
-                if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
-                    this.startMomentumAnimation();
-                }
-                
-                // Set cooldown to prevent accidental taps after gestures
-                this.ignoreTapUntil = Date.now() + 300;
-                
-                // Reset recentlyPanned flag after cooldown
-                setTimeout(() => {
-                    this.recentlyPanned = false;
-                }, 300);
-                
-                console.log('📱 Touch ended - pan state reset');
-            }
-            
-            // Check if this is a tap on a seat (not a drag, pinch, or pan)
+        tablesContainer.addEventListener('touchend', (e) => {
+            // Check if this is a tap on a seat (not a drag)
             if (e.target.classList.contains('seat') && this.touchedSeat === e.target) {
                 const touchDuration = Date.now() - this.touchStartTime;
                 const touchDistance = this.getTouchDistance(
@@ -274,8 +79,8 @@ class StudentTicketingSystem {
                     { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
                 );
                 
-                // Only handle as seat selection if it's a quick tap (not a drag, pinch, or pan) and not in cooldown
-                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched && !this.recentlyPanned && Date.now() > this.ignoreTapUntil) {
+                // Only handle as seat selection if it's a quick tap (not a drag) and not in cooldown
+                if (touchDuration < 500 && touchDistance < this.dragThreshold && Date.now() > this.ignoreTapUntil) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('📱 Mobile seat tap detected:', e.target);
@@ -286,7 +91,7 @@ class StudentTicketingSystem {
         }, { passive: false });
         
         // Pointer events for modern browsers (includes both mouse and touch)
-        hallContent.addEventListener('pointerdown', (e) => {
+        tablesContainer.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('seat')) {
                 console.log('👆 Pointer down on seat:', e.target);
                 this.pointerDownSeat = e.target;
@@ -295,7 +100,7 @@ class StudentTicketingSystem {
             }
         });
         
-        hallContent.addEventListener('pointerup', (e) => {
+        tablesContainer.addEventListener('pointerup', (e) => {
             if (e.target.classList.contains('seat') && this.pointerDownSeat === e.target) {
                 const pointerDuration = Date.now() - this.pointerStartTime;
                 const pointerDistance = this.getTouchDistance(
@@ -401,19 +206,15 @@ class StudentTicketingSystem {
     }
 
     generateHallLayout() {
-        const container = document.getElementById('hallContent');
+        const container = document.getElementById('tablesContainer');
         container.innerHTML = '';
-
-        // Create 6x6 grid of tables
-        const tablesGrid = document.createElement('div');
-        tablesGrid.className = 'tables-grid';
 
         for (let table = 1; table <= this.totalTables; table++) {
             const tableElement = this.createTable(table);
-            tablesGrid.appendChild(tableElement);
+            container.appendChild(tableElement);
         }
 
-        container.appendChild(tablesGrid);
+        console.log('🏗️ Hall layout generated with', this.totalTables, 'tables');
     }
 
     createTable(tableNumber) {
@@ -661,13 +462,6 @@ class StudentTicketingSystem {
 
     // Test function removed - was causing automatic validation alerts on page load
 
-    // Recalculate seat positions when window is resized
-    recalculateSeatPositions() {
-        // With CSS Grid layout, seats automatically adjust to container size
-        // No manual positioning calculations needed
-        // The grid will handle responsive layout automatically
-        console.log('Seat positions recalculated for responsive layout');
-    }
 
     // Emit seat selection update to all clients
     emitSeatSelection(seatId, status) {
@@ -830,170 +624,8 @@ class StudentTicketingSystem {
         this.showModal('confirmationModal');
     }
 
-    // Zoom and Pan functionality
-    zoomIn() {
-        this.currentZoom = Math.min(this.currentZoom * 1.2, 3);
-        this.updateTransform();
-    }
 
-    zoomOut() {
-        this.currentZoom = Math.max(this.currentZoom / 1.2, 0.5);
-        this.updateTransform();
-    }
 
-    resetZoom() {
-        this.currentZoom = 1;
-        this.currentPanX = 0;
-        this.currentPanY = 0;
-        this.updateTransform();
-    }
-
-    updateTransform() {
-        const hallContent = document.getElementById('hallContent');
-        
-        // Use pinch origin if available, otherwise use center
-        const originX = this.pinchOriginX !== undefined ? this.pinchOriginX : '50%';
-        const originY = this.pinchOriginY !== undefined ? this.pinchOriginY : '50%';
-        
-        hallContent.style.transformOrigin = `${originX}px ${originY}px`;
-        hallContent.style.transform = `translate(${this.currentPanX}px, ${this.currentPanY}px) scale(${this.currentZoom})`;
-        
-        // Log transform values for debugging
-        console.log('📱 Transform updated - panX:', this.currentPanX, 'panY:', this.currentPanY, 'zoom:', this.currentZoom);
-    }
-    
-
-    // Smooth pan update using requestAnimationFrame
-    smoothUpdateTransform() {
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
-        
-        this.animationFrameId = requestAnimationFrame(() => {
-            this.updateTransform();
-            this.animationFrameId = null;
-        });
-    }
-
-    startDrag(e) {
-        this.isDragging = true;
-        this.dragStart = { x: e.clientX - this.currentPanX, y: e.clientY - this.currentPanY };
-        document.getElementById('hallLayout').style.cursor = 'grabbing';
-    }
-
-    drag(e) {
-        if (!this.isDragging) return;
-        
-        const newPanX = e.clientX - this.dragStart.x;
-        const newPanY = e.clientY - this.dragStart.y;
-        
-        // Calculate velocity for momentum
-        const currentTime = Date.now();
-        const timeDelta = currentTime - this.lastPanTime;
-        if (timeDelta > 0) {
-            const deltaX = newPanX - this.currentPanX;
-            const deltaY = newPanY - this.currentPanY;
-            this.velocityX = deltaX / timeDelta;
-            this.velocityY = deltaY / timeDelta;
-        }
-        this.lastPanTime = currentTime;
-        
-        // Apply boundaries to prevent panning out of view
-        const hallLayout = document.getElementById('hallLayout');
-        const hallContent = document.getElementById('hallContent');
-        const layoutRect = hallLayout.getBoundingClientRect();
-        const contentRect = hallContent.getBoundingClientRect();
-        
-        // Calculate boundaries based on zoom level
-        const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
-        const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
-        
-        this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, newPanX));
-        this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, newPanY));
-        
-        this.updateTransform();
-    }
-
-    endDrag() {
-        this.isDragging = false;
-        document.getElementById('hallLayout').style.cursor = 'grab';
-        
-        // Set cooldown to prevent accidental taps after gestures
-        this.ignoreTapUntil = Date.now() + 300;
-        
-        // Start momentum animation for desktop drag
-        if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
-            this.startMomentumAnimation();
-        }
-    }
-    
-    // Start momentum animation for smooth panning
-    startMomentumAnimation() {
-        if (this.momentumAnimationId) {
-            cancelAnimationFrame(this.momentumAnimationId);
-        }
-        
-        const friction = 0.95; // Friction coefficient
-        const minVelocity = 0.1; // Minimum velocity to continue animation
-        
-        const animate = () => {
-            // Apply friction
-            this.velocityX *= friction;
-            this.velocityY *= friction;
-            
-            // Update position
-            this.currentPanX += this.velocityX;
-            this.currentPanY += this.velocityY;
-            
-            // Apply boundaries
-            const hallLayout = document.getElementById('hallLayout');
-            const hallContent = document.getElementById('hallContent');
-            const layoutRect = hallLayout.getBoundingClientRect();
-            const contentRect = hallContent.getBoundingClientRect();
-            
-            const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
-            const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
-            
-            this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, this.currentPanX));
-            this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, this.currentPanY));
-            
-            this.updateTransform();
-            
-            // Continue animation if velocity is significant
-            if (Math.abs(this.velocityX) > minVelocity || Math.abs(this.velocityY) > minVelocity) {
-                this.momentumAnimationId = requestAnimationFrame(animate);
-            } else {
-                this.momentumAnimationId = null;
-            }
-        };
-        
-        this.momentumAnimationId = requestAnimationFrame(animate);
-    }
-    
-
-    handleWheel(e) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        this.currentZoom = Math.max(0.5, Math.min(3, this.currentZoom * delta));
-        this.updateTransform();
-    }
-
-    // Touch handling methods for mobile pinch-to-zoom
-    // Old touch handling methods removed - now using unified approach in main event listeners
-
-    // Helper methods for touch calculations
-    getTouchDistance(touch1, touch2) {
-        const dx = touch1.clientX - touch2.clientX;
-        const dy = touch1.clientY - touch2.clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    getTouchCenter(touch1, touch2) {
-        return {
-            x: (touch1.clientX + touch2.clientX) / 2,
-            y: (touch1.clientY + touch2.clientY) / 2
-        };
-    }
 
     // Function to get seat color based on status
     getSeatColor(status) {
