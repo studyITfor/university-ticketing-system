@@ -234,7 +234,7 @@ body {
 /* Tables Layout */
 .tables-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 2rem;
     padding: 2rem;
     width: 100%;
@@ -263,50 +263,54 @@ body {
     z-index: 2;
 }
 
-.table-circle {
-    width: 120px;
-    height: 120px;
-    border: 3px solid #e9ecef;
-    border-radius: 50%;
-    background: white;
+.table {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+    grid-gap: 8px;       /* distance between seats */
+    padding: 10px;       /* inside table */
+    margin-bottom: 20px; /* space between tables */
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.1);
     position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
 }
 
-.table-circle:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+.table::before {
+    content: "Стол " attr(data-table);
+    position: absolute;
+    top: -15px;
+    left: 10px;
+    background: #007bff;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    white-space: nowrap;
+    z-index: 20;
 }
 
-/* Seats around table - CSS Grid Layout */
+.table:hover {
+    transform: scale(1.02);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.15);
+}
+
+/* Seats inside table - CSS Grid Layout */
 .seats-container {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(4, 1fr);
-    gap: 8px;
-    padding: 12px;
-    place-items: center;
+    display: contents; /* Use parent grid */
 }
 
 .seat {
     width: 100%;
-    max-width: 60px;
     aspect-ratio: 1;
     border: 2px solid #e9ecef;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -803,63 +807,18 @@ body {
     }
     
     .tables-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
         padding: 1.5rem;
     }
     
-    .table-circle {
-        width: 160px;
-        height: 160px;
-        /* Ensure enough space for seats */
-        min-width: 160px;
-        min-height: 160px;
-        border: 3px solid #007bff;
-        position: relative;
-    }
-    
-    .table-circle::before {
-        content: "Стол " attr(data-table);
-        position: absolute;
-        top: -25px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #007bff;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        white-space: nowrap;
-        z-index: 20;
-    }
-    
-    .seats-container {
-        /* Enhanced grid spacing for mobile */
-        gap: 12px;
-        padding: 20px;
-        grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: repeat(4, 1fr);
+    .table {
+        grid-gap: 12px;
+        padding: 15px;
     }
     
     .seat {
-        width: 100%;
-        max-width: 60px;
-        aspect-ratio: 1;
-        font-size: 1.1rem;
-        font-weight: bold;
-        /* Ensure minimum touch target size */
-        min-width: 52px;
-        min-height: 52px;
-        /* Touch optimizations */
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-        /* Enhanced visibility */
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: 2px solid #e9ecef;
+        font-size: 0.9rem;
     }
     
     .bank-details {
@@ -907,63 +866,17 @@ body {
     
     .tables-grid {
         grid-template-columns: 1fr;
-        gap: 2.5rem;
-        padding: 2rem;
+        gap: 2rem;
+        padding: 1rem;
     }
     
-    .table-circle {
-        width: 180px;
-        height: 180px;
-        /* Ensure enough space for seats on very small screens */
-        min-width: 180px;
-        min-height: 180px;
-        border: 3px solid #007bff;
-        position: relative;
-        margin: 0 auto;
-    }
-    
-    .table-circle::before {
-        content: "Стол " attr(data-table);
-        position: absolute;
-        top: -25px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #007bff;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 0.9rem;
-        font-weight: bold;
-        white-space: nowrap;
-        z-index: 20;
-    }
-    
-    .seats-container {
-        /* Maximum spacing for very small screens */
-        gap: 14px;
-        padding: 24px;
-        grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: repeat(4, 1fr);
+    .table {
+        grid-gap: 14px;
+        padding: 20px;
     }
     
     .seat {
-        width: 100%;
-        max-width: 70px;
-        aspect-ratio: 1;
-        font-size: 1.2rem;
-        font-weight: bold;
-        /* Ensure minimum touch target size for very small screens */
-        min-width: 56px;
-        min-height: 56px;
-        /* Enhanced touch optimizations */
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-        /* Enhanced visibility */
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: 2px solid #e9ecef;
+        font-size: 0.8rem;
     }
     
     .legend-items {

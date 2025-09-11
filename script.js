@@ -301,16 +301,12 @@ class StudentTicketingSystem {
         tableNumberDiv.textContent = `Стол ${tableNumber}`;
         tableDiv.appendChild(tableNumberDiv);
 
-        // Table circle
-        const tableCircle = document.createElement('div');
-        tableCircle.className = 'table-circle';
-        tableCircle.setAttribute('data-table', tableNumber);
+        // Table container
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'table';
+        tableContainer.setAttribute('data-table', tableNumber);
 
-        // Seats container
-        const seatsContainer = document.createElement('div');
-        seatsContainer.className = 'seats-container';
-
-        // Create 14 seats in a CSS Grid layout
+        // Create 14 seats directly in the table grid
         for (let seat = 1; seat <= this.seatsPerTable; seat++) {
             const seatElement = document.createElement('div');
             seatElement.className = 'seat available';
@@ -319,13 +315,11 @@ class StudentTicketingSystem {
             seatElement.dataset.seat = seat;
             seatElement.dataset.seatId = `${tableNumber}-${seat}`;
 
-            // CSS Grid will handle positioning automatically
-            // No need for complex circular positioning calculations
-            seatsContainer.appendChild(seatElement);
+            // Add seat directly to table container (CSS Grid will handle layout)
+            tableContainer.appendChild(seatElement);
         }
 
-        tableCircle.appendChild(seatsContainer);
-        tableDiv.appendChild(tableCircle);
+        tableDiv.appendChild(tableContainer);
 
         return tableDiv;
     }
