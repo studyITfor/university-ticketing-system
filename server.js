@@ -186,6 +186,21 @@ io.on('connection', (socket) => {
         emitSeatUpdate();
     });
     
+    // Handle seat selection events (allowed for all roles)
+    socket.on('seatSelection', (data) => {
+        console.log('📡 Seat selection event:', data.seatId, 'Status:', data.status, 'From client:', socket.id);
+        
+        // Emit to all clients except the sender
+        socket.broadcast.emit('seatSelection', {
+            seatId: data.seatId,
+            status: data.status,
+            timestamp: data.timestamp,
+            fromClient: socket.id
+        });
+        
+        console.log(`📡 Seat selection broadcasted to ${io.engine.clientsCount - 1} other clients`);
+    });
+    
     // Handle seat modification events (admin only)
     socket.on('modifySeat', (data) => {
         if (socket.data.role !== 'admin' || !socket.data.authenticated) {

@@ -299,14 +299,14 @@ body {
 
 .seat {
     width: 100%;
-    max-width: 50px;
+    max-width: 60px;
     aspect-ratio: 1;
     border: 2px solid #e9ecef;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -826,12 +826,12 @@ body {
     
     .seat {
         width: 100%;
-        max-width: 48px;
+        max-width: 56px;
         aspect-ratio: 1;
-        font-size: 0.8rem;
+        font-size: 1rem;
         /* Ensure minimum touch target size */
-        min-width: 44px;
-        min-height: 44px;
+        min-width: 48px;
+        min-height: 48px;
         /* Touch optimizations */
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
@@ -907,12 +907,12 @@ body {
     
     .seat {
         width: 100%;
-        max-width: 52px;
+        max-width: 64px;
         aspect-ratio: 1;
-        font-size: 0.9rem;
+        font-size: 1.1rem;
         /* Ensure minimum touch target size for very small screens */
-        min-width: 48px;
-        min-height: 48px;
+        min-width: 52px;
+        min-height: 52px;
         /* Enhanced touch optimizations */
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;

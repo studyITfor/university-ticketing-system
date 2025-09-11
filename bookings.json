@@ -399,5 +399,17 @@
     "status": "pending",
     "id": "BKMFFIXIDG",
     "bookingDate": "2025-09-11T14:48:54.340Z"
+  },
+  "BKMFFJFM0A": {
+    "firstName": "LocalTest",
+    "lastName": "RealTimeSync",
+    "phone": "+996555999000",
+    "email": "local@test.com",
+    "table": "22",
+    "seat": "90",
+    "price": 5900,
+    "status": "pending",
+    "id": "BKMFFJFM0A",
+    "bookingDate": "2025-09-11T15:02:58.858Z"
   }
 }

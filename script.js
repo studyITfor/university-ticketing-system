@@ -87,6 +87,8 @@ class StudentTicketingSystem {
         
         // Touch events for mobile - multiple approaches for better compatibility
         hallContent.addEventListener('touchstart', (e) => {
+            this.touches = Array.from(e.touches);
+            
             if (e.target.classList.contains('seat')) {
                 console.log('📱 Mobile touch start on seat:', e.target);
                 // Store the seat element for potential tap handling
@@ -97,9 +99,48 @@ class StudentTicketingSystem {
                     y: e.touches[0].clientY
                 };
             }
+            
+            // Handle pinch-to-zoom
+            if (this.touches.length === 2) {
+                this.isPinching = true;
+                this.lastTouchDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+                this.lastPinchCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
+                console.log('📱 Pinch gesture started');
+            }
+        });
+        
+        hallContent.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling during touch
+            
+            this.touches = Array.from(e.touches);
+            
+            // Handle pinch-to-zoom
+            if (this.touches.length === 2 && this.isPinching) {
+                const currentDistance = this.getTouchDistance(this.touches[0], this.touches[1]);
+                const currentCenter = this.getTouchCenter(this.touches[0], this.touches[1]);
+                
+                if (this.lastTouchDistance > 0) {
+                    const scale = currentDistance / this.lastTouchDistance;
+                    this.zoomIn(scale - 1); // Adjust zoom based on scale change
+                    
+                    // Pan based on center movement
+                    const deltaX = currentCenter.x - this.lastPinchCenter.x;
+                    const deltaY = currentCenter.y - this.lastPinchCenter.y;
+                    this.pan(deltaX, deltaY);
+                }
+                
+                this.lastTouchDistance = currentDistance;
+                this.lastPinchCenter = currentCenter;
+            }
         });
         
         hallContent.addEventListener('touchend', (e) => {
+            // Reset pinch state
+            if (this.touches.length < 2) {
+                this.isPinching = false;
+                this.lastTouchDistance = 0;
+            }
+            
             // Check if this is a tap on a seat (not a drag or pinch)
             if (e.target.classList.contains('seat') && this.touchedSeat === e.target) {
                 const touchDuration = Date.now() - this.touchStartTime;
@@ -506,6 +547,62 @@ class StudentTicketingSystem {
         // No manual positioning calculations needed
         // The grid will handle responsive layout automatically
         console.log('Seat positions recalculated for responsive layout');
+    }
+
+    // Emit seat selection update to all clients
+    emitSeatSelection(seatId, status) {
+        if (this.socket && this.socket.connected) {
+            console.log(`📡 Emitting seat selection: ${seatId} -> ${status}`);
+            this.socket.emit('seatSelection', {
+                seatId: seatId,
+                status: status,
+                timestamp: Date.now(),
+                clientId: this.socket.id
+            });
+        } else {
+            console.warn('❌ Socket not connected, cannot emit seat selection');
+        }
+    }
+
+    // Update seat status from real-time selection events
+    updateSeatStatusFromSelection(seatId, status) {
+        console.log(`🔄 Updating seat ${seatId} to ${status} from real-time selection`);
+        
+        const seatElement = document.querySelector(`[data-seat-id="${seatId}"]`);
+        if (seatElement) {
+            // Update the seat class based on status
+            seatElement.className = 'seat';
+            
+            if (status === 'selected') {
+                seatElement.classList.add('selected');
+                seatElement.style.backgroundColor = '#007bff';
+                seatElement.style.borderColor = '#007bff';
+                seatElement.style.color = 'white';
+            } else if (status === 'available') {
+                seatElement.classList.add('available');
+                seatElement.style.backgroundColor = '#4CAF50';
+                seatElement.style.borderColor = '#4CAF50';
+                seatElement.style.color = 'white';
+            }
+            
+            console.log(`✅ Seat ${seatId} updated to ${status}`);
+        } else {
+            console.warn(`⚠️ Seat element not found for ${seatId}`);
+        }
+    }
+
+    // Helper methods for touch gestures
+    getTouchDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    getTouchCenter(touch1, touch2) {
+        return {
+            x: (touch1.clientX + touch2.clientX) / 2,
+            y: (touch1.clientY + touch2.clientY) / 2
+        };
     }
 
     async saveBooking(bookingData) {
@@ -1175,6 +1272,20 @@ class StudentTicketingSystem {
                 }
             });
             
+            // Handle seat selection events from other clients
+            this.socket.on('seatSelection', (data) => {
+                console.log('📡 Received seat selection from another client:', data);
+                
+                // Don't process our own seat selections
+                if (data.fromClient === this.socket.id) {
+                    console.log('🔄 Ignoring own seat selection event');
+                    return;
+                }
+                
+                // Update the seat status immediately
+                this.updateSeatStatusFromSelection(data.seatId, data.status);
+            });
+            
             this.socket.on('connect_error', (error) => {
                 this.socketStatus.connectionAttempts++;
                 console.error('🚨 Socket.IO connection error:', error);
@@ -1739,6 +1850,10 @@ Socket.IO Diagnostics:
             // If seat is available, open booking modal immediately
             if (seatElement.classList.contains('available') || seatElement.classList.contains('active')) {
                 console.log(`✅ Opening booking modal for seat: ${seatId}`);
+                
+                // Emit real-time update to all clients that seat is being selected
+                this.emitSeatSelection(seatId, 'selected');
+                
                 this.showBookingModal(seatId);
                 return;
             }
