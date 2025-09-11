@@ -304,6 +304,7 @@ class StudentTicketingSystem {
         // Table circle
         const tableCircle = document.createElement('div');
         tableCircle.className = 'table-circle';
+        tableCircle.setAttribute('data-table', tableNumber);
 
         // Seats container
         const seatsContainer = document.createElement('div');

@@ -1690,6 +1690,29 @@ ID бронирования: ${bookingId}
                 this.handlePrebookResult(result);
             });
             
+            // Handle real-time seat status updates from other admins
+            this.socket.on('update-seat-status', (data) => {
+                console.log('Admin panel received seat status update:', data);
+                
+                if (data.type === 'booking-created') {
+                    console.log('📡 New booking created by another admin:', data.data);
+                    this.showNotification(`Новое бронирование: ${data.data.firstName} ${data.data.lastName} - Стол ${data.data.table}, Место ${data.data.seat}`, 'info');
+                } else if (data.type === 'payment-confirmed') {
+                    console.log('📡 Payment confirmed by another admin:', data.data);
+                    this.showNotification(`Оплата подтверждена: ${data.data.firstName} ${data.data.lastName} - Билет ${data.data.ticketId}`, 'success');
+                } else if (data.type === 'booking-deleted') {
+                    console.log('📡 Booking deleted by another admin:', data.data);
+                    this.showNotification(`Бронирование удалено: ${data.data.firstName} ${data.data.lastName} - Стол ${data.data.table}, Место ${data.data.seat}`, 'warning');
+                }
+                
+                // Refresh admin data to show latest changes
+                this.loadBookings();
+                this.updateStatistics();
+                this.generateHallPreview();
+                this.renderPrebookedTable();
+                this.updatePrebookedStats();
+            });
+            
             this.socket.on('connect_error', (error) => {
                 console.error('Admin panel Socket.IO connection error:', error);
             });
@@ -1705,6 +1728,80 @@ ID бронирования: ${bookingId}
             role: 'admin', 
             password: this.adminPassword 
         });
+    }
+    
+    // Show notification for real-time updates
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        // Add styles if not already added
+        if (!document.getElementById('notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'notification-styles';
+            style.textContent = `
+                .notification {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: white;
+                    border-left: 4px solid #007bff;
+                    border-radius: 4px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    padding: 12px 16px;
+                    z-index: 10000;
+                    max-width: 400px;
+                    animation: slideIn 0.3s ease-out;
+                }
+                .notification-success {
+                    border-left-color: #28a745;
+                }
+                .notification-warning {
+                    border-left-color: #ffc107;
+                }
+                .notification-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .notification-content i {
+                    color: #007bff;
+                }
+                .notification-success .notification-content i {
+                    color: #28a745;
+                }
+                .notification-warning .notification-content i {
+                    color: #ffc107;
+                }
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 5000);
     }
 }
 

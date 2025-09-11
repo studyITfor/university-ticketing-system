@@ -263,6 +263,23 @@ io.on('connection', (socket) => {
     socket.on('ping', () => {
         socket.emit('pong', { timestamp: Date.now() });
     });
+    
+    // Handle booking creation events (broadcast to all admins)
+    socket.on('booking-created', (data) => {
+        console.log('📡 Booking created event received:', data);
+        
+        // Broadcast to all connected clients
+        io.emit('update-seat-status', {
+            type: 'booking-created',
+            data: data,
+            timestamp: Date.now()
+        });
+        
+        // Also emit seat update to refresh all clients
+        emitSeatUpdate();
+        
+        console.log(`📡 Booking created broadcasted to ${io.engine.clientsCount} connected clients`);
+    });
 });
 
 // Function to release all seats and emit bulk update
@@ -802,6 +819,20 @@ app.post('/api/create-booking', async (req, res) => {
         bookings[bookingId] = bookingData;
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
+        // Emit booking created event to all connected clients
+        io.emit('update-seat-status', {
+            type: 'booking-created',
+            data: {
+                bookingId: bookingId,
+                table: bookingData.table,
+                seat: bookingData.seat,
+                status: bookingData.status,
+                firstName: bookingData.firstName,
+                lastName: bookingData.lastName
+            },
+            timestamp: Date.now()
+        });
+        
         // Emit seat update to all connected clients
         emitSeatUpdate();
         
@@ -877,6 +908,21 @@ app.post('/api/confirm-payment', async (req, res) => {
         bookings[bookingId] = booking;
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
+        // Emit payment confirmed event to all connected clients
+        io.emit('update-seat-status', {
+            type: 'payment-confirmed',
+            data: {
+                bookingId: bookingId,
+                table: booking.table,
+                seat: booking.seat,
+                status: booking.status,
+                firstName: booking.firstName,
+                lastName: booking.lastName,
+                ticketId: ticketId
+            },
+            timestamp: Date.now()
+        });
+        
         // Emit seat update to all connected clients
         emitSeatUpdate();
         
@@ -919,9 +965,26 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             }
         }
         
+        // Store booking data before deletion for event emission
+        const deletedBooking = { ...booking };
+        
         // Remove booking
         delete bookings[bookingId];
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        
+        // Emit booking deleted event to all connected clients
+        io.emit('update-seat-status', {
+            type: 'booking-deleted',
+            data: {
+                bookingId: bookingId,
+                table: deletedBooking.table,
+                seat: deletedBooking.seat,
+                status: 'available',
+                firstName: deletedBooking.firstName,
+                lastName: deletedBooking.lastName
+            },
+            timestamp: Date.now()
+        });
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
