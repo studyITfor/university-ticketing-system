@@ -571,8 +571,17 @@ body {
     overflow: hidden;
     margin: 1rem 0;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease;
+    transition: transform 0.1s ease-out; /* Faster transition for better responsiveness */
     touch-action: none; /* Enable custom touch handling for pan/zoom */
+    user-select: none; /* Prevent text selection during pan/zoom */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    cursor: grab; /* Show grab cursor for panning */
+}
+
+.hall-layout-curved:active {
+    cursor: grabbing; /* Show grabbing cursor when actively panning */
 }
 
 .stage-area {
@@ -1311,6 +1320,11 @@ body {
     .hall-layout-curved {
         height: 800px;
         touch-action: none; /* Enable custom touch handling for pan/zoom on mobile */
+        cursor: grab; /* Show grab cursor for panning on mobile */
+    }
+    
+    .hall-layout-curved:active {
+        cursor: grabbing; /* Show grabbing cursor when actively panning on mobile */
     }
     
     .table-preview-curved {

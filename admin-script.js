@@ -73,9 +73,18 @@ class AdminPanel {
     setupTouchEvents() {
         if (!this.hall) return;
 
-        // Touch events for pinch-to-zoom and pan
+        // Enhanced touch handling for better mobile experience
+        let touchStartTime = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let hasMoved = false;
+        let touchMoveThreshold = 10; // pixels
+
         this.hall.addEventListener('touchstart', (e) => {
             this.lastTouchTime = Date.now();
+            touchStartTime = Date.now();
+            hasMoved = false;
+            
             if (e.touches.length === 2) {
                 this.isPinching = true;
                 this.lastDistance = this.getDistance(e.touches);
@@ -89,6 +98,8 @@ class AdminPanel {
                 this.isPanning = true;
                 this.startPanX = e.touches[0].clientX - this.translateX;
                 this.startPanY = e.touches[0].clientY - this.translateY;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
             }
         }, { passive: false });
 
@@ -96,7 +107,7 @@ class AdminPanel {
             if (this.isPinching && e.touches.length === 2) {
                 const dist = this.getDistance(e.touches);
                 const delta = dist - this.lastDistance; // positive => fingers apart => zoom in
-                const sensitivity = 0.004; // tuneable
+                const sensitivity = 0.003; // reduced for smoother zoom
                 const oldScale = this.scale;
                 this.scale = this.clamp(this.scale + delta * sensitivity, this.minScale, this.maxScale);
 
@@ -118,17 +129,31 @@ class AdminPanel {
                 requestAnimationFrame(() => this.applyTransform());
                 e.preventDefault();
             } else if (this.isPanning && e.touches.length === 1 && !this.isPinching) {
-                this.translateX = e.touches[0].clientX - this.startPanX;
-                this.translateY = e.touches[0].clientY - this.startPanY;
+                // Check if touch has moved enough to be considered a pan
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                const deltaX = Math.abs(currentX - touchStartX);
+                const deltaY = Math.abs(currentY - touchStartY);
+                
+                if (deltaX > touchMoveThreshold || deltaY > touchMoveThreshold) {
+                    hasMoved = true;
+                }
+                
+                this.translateX = currentX - this.startPanX;
+                this.translateY = currentY - this.startPanY;
+                
                 const b = this.getBounds();
                 this.translateX = this.clamp(this.translateX, b.minX, b.maxX);
                 this.translateY = this.clamp(this.translateY, b.minY, b.maxY);
+                
                 requestAnimationFrame(() => this.applyTransform());
                 e.preventDefault();
             }
         }, { passive: false });
 
         this.hall.addEventListener('touchend', (e) => {
+            const touchDuration = Date.now() - touchStartTime;
+            
             if (e.touches.length < 2) { 
                 this.isPinching = false; 
                 this.lastDistance = null; 
@@ -136,12 +161,25 @@ class AdminPanel {
             if (e.touches.length === 0) { 
                 this.isPanning = false; 
             }
-            this.ignoreTapUntil = Date.now() + 250; // short cooldown after gestures
+            
+            // Set cooldown based on gesture type
+            if (this.isPinching || hasMoved) {
+                this.ignoreTapUntil = Date.now() + 300; // longer cooldown for gestures
+            } else if (touchDuration < 200) {
+                this.ignoreTapUntil = Date.now() + 100; // shorter cooldown for quick taps
+            } else {
+                this.ignoreTapUntil = Date.now() + 200; // medium cooldown for longer taps
+            }
         });
 
-        // Robust click/tap handler with cooldown and authoritative status check
+        // Enhanced click/tap handler with better conflict resolution
         this.hall.addEventListener('click', (e) => this.seatClickHandler(e));
-        this.hall.addEventListener('touchend', (e) => this.seatClickHandler(e), { passive: false });
+        this.hall.addEventListener('touchend', (e) => {
+            // Only handle seat clicks if it wasn't a pan/zoom gesture
+            if (!hasMoved && !this.isPinching) {
+                this.seatClickHandler(e);
+            }
+        }, { passive: false });
     }
 
     seatClickHandler(e) {
@@ -170,19 +208,29 @@ class AdminPanel {
     showAlreadyBookedModal(seatEl) {
         const seatId = seatEl.dataset.seatId;
         const [table, seat] = seatId.split('-');
+        const seatStatus = seatEl.dataset.status;
         const booking = Object.values(this.bookings).find(b => 
             b.table == table && b.seat == seat && b.status !== 'cancelled'
         );
         
         let status = 'Забронировано';
-        let message = 'Это место уже забронировано и оплачено.';
+        let message = 'Это место недоступно для бронирования.';
         
-        if (booking) {
+        // Check seat status first, then booking details
+        if (seatStatus === 'reserved' || seatStatus === 'paid') {
+            status = seatStatus === 'paid' ? 'Оплачено' : 'Зарезервировано';
+            message = 'Это место недоступно для бронирования.';
+        } else if (seatStatus === 'booked') {
+            status = 'Забронировано';
+            message = 'Это место недоступно для бронирования.';
+        } else if (booking) {
             status = this.getStatusText(booking.status);
             if (booking.status === 'pending') {
                 message = 'Это место забронировано, но еще не оплачено.';
             } else if (booking.status === 'paid' || booking.status === 'confirmed') {
                 message = `Это место забронировано и оплачено пользователем ${booking.firstName} ${booking.lastName}.`;
+            } else {
+                message = 'Это место недоступно для бронирования.';
             }
         }
         

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Pan/Zoom & Seat Click Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .test-container {
+            width: 100%;
+            height: 80vh;
+            border: 2px solid #333;
+            background: white;
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            cursor: grab;
+        }
+        
+        .test-container:active {
+            cursor: grabbing;
+        }
+        
+        .test-content {
+            width: 2000px;
+            height: 1500px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+            position: relative;
+            transform-origin: 0 0;
+        }
+        
+        .test-seat {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: #333;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .test-seat.booked {
+            background: #e74c3c;
+        }
+        
+        .test-seat.available {
+            background: #27ae60;
+        }
+        
+        .test-seat.pending {
+            background: #f39c12;
+        }
+        
+        .test-seat.paid {
+            background: #8e44ad;
+        }
+        
+        .test-seat.reserved {
+            background: #34495e;
+        }
+        
+        .controls {
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #ddd;
+            border-radius: 5px;
+        }
+        
+        .log {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mobile Pan/Zoom & Seat Click Test</h1>
+    
+    <div class="controls">
+        <button class="btn btn-primary" onclick="resetView()">Reset View</button>
+        <button class="btn btn-primary" onclick="testSeatMessages()">Test Seat Messages</button>
+        <button class="btn btn-primary" onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div class="status" id="status">
+        Scale: 1.0 | X: 0 | Y: 0 | Touches: 0
+    </div>
+    
+    <div class="test-container" id="container">
+        <div class="test-content" id="content">
+            <div class="test-seat available" data-seat-id="1-1" data-status="available" style="top: 100px; left: 100px;">1-1</div>
+            <div class="test-seat booked" data-seat-id="1-2" data-status="booked" style="top: 100px; left: 200px;">1-2</div>
+            <div class="test-seat pending" data-seat-id="1-3" data-status="pending" style="top: 100px; left: 300px;">1-3</div>
+            <div class="test-seat paid" data-seat-id="2-1" data-status="paid" style="top: 200px; left: 100px;">2-1</div>
+            <div class="test-seat available" data-seat-id="2-2" data-status="available" style="top: 200px; left: 200px;">2-2</div>
+            <div class="test-seat reserved" data-seat-id="2-3" data-status="reserved" style="top: 200px; left: 300px;">2-3</div>
+            <div class="test-seat available" data-seat-id="3-1" data-status="available" style="top: 300px; left: 100px;">3-1</div>
+            <div class="test-seat booked" data-seat-id="3-2" data-status="booked" style="top: 300px; left: 200px;">3-2</div>
+            <div class="test-seat paid" data-seat-id="3-3" data-status="paid" style="top: 300px; left: 300px;">3-3</div>
+        </div>
+    </div>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        // Pan/zoom state variables
+        let scale = 1;
+        let minScale = 0.3;
+        let maxScale = 3.0;
+        let lastDistance = null;
+        let translateX = 0;
+        let translateY = 0;
+        let startPanX = 0;
+        let startPanY = 0;
+        let isPanning = false;
+        let isPinching = false;
+        let lastTouchTime = 0;
+        let ignoreTapUntil = 0;
+        
+        // Enhanced touch handling variables
+        let touchStartTime = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let hasMoved = false;
+        let touchMoveThreshold = 10;
+        
+        const container = document.getElementById('container');
+        const content = document.getElementById('content');
+        const status = document.getElementById('status');
+        const log = document.getElementById('log');
+        
+        function logMessage(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function updateStatus() {
+            status.textContent = `Scale: ${scale.toFixed(2)} | X: ${Math.round(translateX)} | Y: ${Math.round(translateY)} | Touches: ${lastTouchTime > 0 ? 'Active' : 'None'}`;
+        }
+        
+        function clamp(v, a, b) {
+            return Math.max(a, Math.min(b, v));
+        }
+        
+        function getBounds() {
+            const containerRect = container.getBoundingClientRect();
+            const contentRect = content.getBoundingClientRect();
+            const scaledWidth = contentRect.width * scale;
+            const scaledHeight = contentRect.height * scale;
+            
+            const minX = Math.min(0, containerRect.width - scaledWidth);
+            const minY = Math.min(0, containerRect.height - scaledHeight);
+            const maxX = 0;
+            const maxY = 0;
+            
+            return { minX, maxX, minY, maxY };
+        }
+        
+        function applyTransform() {
+            content.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            updateStatus();
+        }
+        
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+        
+        function getMidpoint(touches) {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2,
+            };
+        }
+        
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+            logMessage('View reset');
+        }
+        
+        function testSeatMessages() {
+            logMessage('Testing seat messages...');
+            const seats = document.querySelectorAll('.test-seat');
+            seats.forEach(seat => {
+                const status = seat.dataset.status;
+                const seatId = seat.dataset.seatId;
+                logMessage(`Seat ${seatId}: ${status}`);
+            });
+        }
+        
+        function clearLog() {
+            log.innerHTML = '<div>Log cleared</div>';
+        }
+        
+        // Enhanced touch events
+        content.addEventListener('touchstart', (e) => {
+            lastTouchTime = Date.now();
+            touchStartTime = Date.now();
+            hasMoved = false;
+            
+            if (e.touches.length === 2) {
+                isPinching = true;
+                lastDistance = getDistance(e.touches);
+                const mid = getMidpoint(e.touches);
+                const rect = content.getBoundingClientRect();
+                content.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
+                logMessage('Pinch gesture started');
+                e.preventDefault();
+            } else if (e.touches.length === 1) {
+                isPanning = true;
+                startPanX = e.touches[0].clientX - translateX;
+                startPanY = e.touches[0].clientY - translateY;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                logMessage('Pan gesture started');
+            }
+        }, { passive: false });
+        
+        content.addEventListener('touchmove', (e) => {
+            if (isPinching && e.touches.length === 2) {
+                const dist = getDistance(e.touches);
+                const delta = dist - lastDistance;
+                const sensitivity = 0.003;
+                const oldScale = scale;
+                scale = clamp(scale + delta * sensitivity, minScale, maxScale);
+                
+                const mid = getMidpoint(e.touches);
+                const rect = content.getBoundingClientRect();
+                const cx = mid.x - rect.left;
+                const cy = mid.y - rect.top;
+                translateX = (translateX - cx) * (scale / oldScale) + cx;
+                translateY = (translateY - cy) * (scale / oldScale) + cy;
+                
+                lastDistance = dist;
+                
+                const b = getBounds();
+                translateX = clamp(translateX, b.minX, b.maxX);
+                translateY = clamp(translateY, b.minY, b.maxY);
+                
+                requestAnimationFrame(applyTransform);
+                logMessage(`Pinch: scale=${scale.toFixed(2)}, delta=${delta.toFixed(2)}`);
+                e.preventDefault();
+            } else if (isPanning && e.touches.length === 1 && !isPinching) {
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                const deltaX = Math.abs(currentX - touchStartX);
+                const deltaY = Math.abs(currentY - touchStartY);
+                
+                if (deltaX > touchMoveThreshold || deltaY > touchMoveThreshold) {
+                    hasMoved = true;
+                }
+                
+                translateX = currentX - startPanX;
+                translateY = currentY - startPanY;
+                
+                const b = getBounds();
+                translateX = clamp(translateX, b.minX, b.maxX);
+                translateY = clamp(translateY, b.minY, b.maxY);
+                
+                requestAnimationFrame(applyTransform);
+                logMessage(`Pan: x=${Math.round(translateX)}, y=${Math.round(translateY)}`);
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        content.addEventListener('touchend', (e) => {
+            const touchDuration = Date.now() - touchStartTime;
+            
+            if (e.touches.length < 2) {
+                isPinching = false;
+                lastDistance = null;
+                logMessage('Pinch gesture ended');
+            }
+            if (e.touches.length === 0) {
+                isPanning = false;
+                lastTouchTime = 0;
+                logMessage('Pan gesture ended');
+            }
+            
+            if (isPinching || hasMoved) {
+                ignoreTapUntil = Date.now() + 300;
+            } else if (touchDuration < 200) {
+                ignoreTapUntil = Date.now() + 100;
+            } else {
+                ignoreTapUntil = Date.now() + 200;
+            }
+        });
+        
+        // Enhanced seat click handler
+        content.addEventListener('click', (e) => handleSeatClick(e));
+        content.addEventListener('touchend', (e) => {
+            if (!hasMoved && !isPinching) {
+                handleSeatClick(e);
+            }
+        }, { passive: false });
+        
+        function handleSeatClick(e) {
+            const now = Date.now();
+            if (now < ignoreTapUntil) {
+                logMessage('Click ignored (gesture cooldown)');
+                e.preventDefault();
+                return;
+            }
+            
+            const seatEl = e.target.closest('.test-seat');
+            if (!seatEl) return;
+            
+            const status = seatEl.dataset.status;
+            const seatId = seatEl.dataset.seatId;
+            
+            logMessage(`Seat clicked: ${seatId}, status: ${status}`);
+            
+            if (status === 'booked' || status === 'paid' || status === 'reserved') {
+                showAlreadyBookedModal(seatEl);
+                e.preventDefault();
+                return;
+            }
+            
+            logMessage(`Seat ${seatId} is available - can be booked`);
+            alert(`Seat ${seatId} is available for booking!`);
+        }
+        
+        function showAlreadyBookedModal(seatEl) {
+            const seatId = seatEl.dataset.seatId;
+            const seatStatus = seatEl.dataset.status;
+            const [table, seat] = seatId.split('-');
+            
+            let status = 'Забронировано';
+            let message = 'Это место недоступно для бронирования.';
+            
+            if (seatStatus === 'reserved' || seatStatus === 'paid') {
+                status = seatStatus === 'paid' ? 'Оплачено' : 'Зарезервировано';
+                message = 'Это место недоступно для бронирования.';
+            } else if (seatStatus === 'booked') {
+                status = 'Забронировано';
+                message = 'Это место недоступно для бронирования.';
+            } else if (seatStatus === 'pending') {
+                status = 'Ожидает подтверждения';
+                message = 'Это место забронировано, но еще не оплачено.';
+            }
+            
+            logMessage(`Showing modal for seat ${seatId}: ${status} - ${message}`);
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>Место ${table}-${seat}</h3>
+                    <p><strong>Статус:</strong> ${status}</p>
+                    <p>${message}</p>
+                    <button class="btn btn-primary" onclick="this.closest('.modal').remove()">ОК</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        // Initialize
+        applyTransform();
+        logMessage('Mobile pan/zoom and seat click test initialized');
+        logMessage('Try: 1-finger drag to pan, 2-finger pinch to zoom, tap seats to test messages');
+    </script>
+</body>
+</html>
