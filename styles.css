@@ -241,11 +241,27 @@ body {
 .hall-content.panning {
     cursor: grabbing !important;
     transition: none; /* Disable transitions during panning for smooth movement */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .hall-content.zooming {
     cursor: zoom-in !important;
     transition: none; /* Disable transitions during zooming for smooth scaling */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Smooth momentum panning */
+.hall-content {
+    -webkit-transform: translateZ(0); /* Hardware acceleration */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 /* Tables Layout */

@@ -29,6 +29,12 @@ class StudentTicketingSystem {
         this.lastPanX = 0;
         this.lastPanY = 0;
         this.recentlyPanned = false;
+        
+        // Momentum/inertia properties for smooth panning
+        this.velocityX = 0;
+        this.velocityY = 0;
+        this.lastPanTime = 0;
+        this.momentumAnimationId = null;
         this.currentBookingSeat = null;
         this.tempBookingData = null;
         this.modalReadyForSubmission = false; // Store temporary booking data before payment
@@ -39,7 +45,7 @@ class StudentTicketingSystem {
         // Touch handling for mobile seat selection
         this.touchStartTime = 0;
         this.touchStartPosition = { x: 0, y: 0 };
-        this.dragThreshold = 10; // pixels of movement before considering it a drag
+        this.dragThreshold = 3; // pixels of movement before considering it a drag (reduced for more responsive panning)
         this.touchedSeat = null; // Track which seat was touched
         this.pointerDownSeat = null; // Track which seat had pointer down
         this.pointerStartTime = 0;
@@ -176,8 +182,8 @@ class StudentTicketingSystem {
                 const deltaY = touch.clientY - this.panStartY;
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 
-                // Start panning if movement exceeds threshold (reduced for more responsive panning)
-                if (distance > 5 && !this.isPanning) {
+                // Start panning if movement exceeds threshold (very responsive panning)
+                if (distance > 2 && !this.isPanning) {
                     this.isPanning = true;
                     this.recentlyPanned = true;
                     hallContent.classList.add('panning');
@@ -202,7 +208,16 @@ class StudentTicketingSystem {
                     this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, newPanX));
                     this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, newPanY));
                     
-                    this.smoothUpdateTransform();
+                    // Calculate velocity for momentum
+                    const currentTime = Date.now();
+                    const timeDelta = currentTime - this.lastPanTime;
+                    if (timeDelta > 0) {
+                        this.velocityX = deltaX / timeDelta;
+                        this.velocityY = deltaY / timeDelta;
+                    }
+                    this.lastPanTime = currentTime;
+                    
+                    this.updateTransform();
                     
                     console.log('📱 Pan move - deltaX:', deltaX, 'deltaY:', deltaY, 'currentPanX:', this.currentPanX, 'currentPanY:', this.currentPanY);
                 }
@@ -230,6 +245,11 @@ class StudentTicketingSystem {
                 this.isPanning = false;
                 this.recentlyPanned = true;
                 hallContent.classList.remove('panning');
+                
+                // Start momentum animation if there's velocity
+                if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
+                    this.startMomentumAnimation();
+                }
                 
                 // Reset recentlyPanned flag after cooldown
                 setTimeout(() => {
@@ -856,14 +876,87 @@ class StudentTicketingSystem {
     drag(e) {
         if (!this.isDragging) return;
         
-        this.currentPanX = e.clientX - this.dragStart.x;
-        this.currentPanY = e.clientY - this.dragStart.y;
+        const newPanX = e.clientX - this.dragStart.x;
+        const newPanY = e.clientY - this.dragStart.y;
+        
+        // Calculate velocity for momentum
+        const currentTime = Date.now();
+        const timeDelta = currentTime - this.lastPanTime;
+        if (timeDelta > 0) {
+            const deltaX = newPanX - this.currentPanX;
+            const deltaY = newPanY - this.currentPanY;
+            this.velocityX = deltaX / timeDelta;
+            this.velocityY = deltaY / timeDelta;
+        }
+        this.lastPanTime = currentTime;
+        
+        // Apply boundaries to prevent panning out of view
+        const hallLayout = document.getElementById('hallLayout');
+        const hallContent = document.getElementById('hallContent');
+        const layoutRect = hallLayout.getBoundingClientRect();
+        const contentRect = hallContent.getBoundingClientRect();
+        
+        // Calculate boundaries based on zoom level
+        const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
+        const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
+        
+        this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, newPanX));
+        this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, newPanY));
+        
         this.updateTransform();
     }
 
     endDrag() {
         this.isDragging = false;
         document.getElementById('hallLayout').style.cursor = 'grab';
+        
+        // Start momentum animation for desktop drag
+        if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
+            this.startMomentumAnimation();
+        }
+    }
+    
+    // Start momentum animation for smooth panning
+    startMomentumAnimation() {
+        if (this.momentumAnimationId) {
+            cancelAnimationFrame(this.momentumAnimationId);
+        }
+        
+        const friction = 0.95; // Friction coefficient
+        const minVelocity = 0.1; // Minimum velocity to continue animation
+        
+        const animate = () => {
+            // Apply friction
+            this.velocityX *= friction;
+            this.velocityY *= friction;
+            
+            // Update position
+            this.currentPanX += this.velocityX;
+            this.currentPanY += this.velocityY;
+            
+            // Apply boundaries
+            const hallLayout = document.getElementById('hallLayout');
+            const hallContent = document.getElementById('hallContent');
+            const layoutRect = hallLayout.getBoundingClientRect();
+            const contentRect = hallContent.getBoundingClientRect();
+            
+            const maxPanX = Math.max(0, (contentRect.width * this.currentZoom - layoutRect.width) / 2);
+            const maxPanY = Math.max(0, (contentRect.height * this.currentZoom - layoutRect.height) / 2);
+            
+            this.currentPanX = Math.max(-maxPanX, Math.min(maxPanX, this.currentPanX));
+            this.currentPanY = Math.max(-maxPanY, Math.min(maxPanY, this.currentPanY));
+            
+            this.updateTransform();
+            
+            // Continue animation if velocity is significant
+            if (Math.abs(this.velocityX) > minVelocity || Math.abs(this.velocityY) > minVelocity) {
+                this.momentumAnimationId = requestAnimationFrame(animate);
+            } else {
+                this.momentumAnimationId = null;
+            }
+        };
+        
+        this.momentumAnimationId = requestAnimationFrame(animate);
     }
 
     handleWheel(e) {
