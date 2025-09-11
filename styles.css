@@ -256,14 +256,6 @@ body {
     user-select: none;
 }
 
-.hall-content.scrolling {
-    cursor: grabbing !important;
-    transition: none; /* Disable transitions during scrolling for smooth movement */
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
 
 /* Smooth momentum panning */
 .hall-content {

@@ -36,13 +36,6 @@ class StudentTicketingSystem {
         this.lastPanTime = 0;
         this.momentumAnimationId = null;
         
-        // Vertical scroll properties for tables panel
-        this.currentScrollY = 0;
-        this.scrollVelocityY = 0;
-        this.isScrolling = false;
-        this.scrollStartY = 0;
-        this.lastScrollY = 0;
-        this.scrollAnimationId = null;
         this.currentBookingSeat = null;
         this.tempBookingData = null;
         this.modalReadyForSubmission = false; // Store temporary booking data before payment
@@ -64,6 +57,9 @@ class StudentTicketingSystem {
         this.lastTouchDistance = 0;
         this.isPinching = false;
         this.lastPinchCenter = { x: 0, y: 0 };
+        
+        // Cooldown for preventing accidental taps after gestures
+        this.ignoreTapUntil = 0;
         
         this.init();
     }
@@ -105,7 +101,7 @@ class StudentTicketingSystem {
         
         // Click events for desktop
         hallContent.addEventListener('click', (e) => {
-            if (e.target.classList.contains('seat')) {
+            if (e.target.classList.contains('seat') && Date.now() > this.ignoreTapUntil) {
                 console.log('🖱️ Desktop seat click detected:', e.target);
                 this.handleSeatClick(e.target, e);
             }
@@ -184,30 +180,18 @@ class StudentTicketingSystem {
                 this.lastPinchCenter = { x: midX, y: midY };
                 e.preventDefault(); // Prevent browser pinch zoom
             } else if (this.touches.length === 1 && !this.isPinching) {
-                // Handle single-finger pan/drag or vertical scroll
+                // Handle single-finger pan/drag - works in ALL directions
                 const touch = this.touches[0];
                 const deltaX = touch.clientX - this.panStartX;
                 const deltaY = touch.clientY - this.panStartY;
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 
-                // Determine if this is primarily horizontal (pan) or vertical (scroll) movement
-                const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
-                const isVertical = Math.abs(deltaY) > Math.abs(deltaX);
-                
-                // Start panning if movement exceeds threshold and is primarily horizontal
-                if (distance > 2 && !this.isPanning && !this.isScrolling && isHorizontal) {
+                // Start panning if movement exceeds threshold - works in all directions
+                if (distance > 2 && !this.isPanning) {
                     this.isPanning = true;
                     this.recentlyPanned = true;
                     hallContent.classList.add('panning');
-                    console.log('📱 Pan gesture started - distance:', distance, 'horizontal');
-                }
-                // Start scrolling if movement exceeds threshold and is primarily vertical
-                else if (distance > 2 && !this.isPanning && !this.isScrolling && isVertical) {
-                    this.isScrolling = true;
-                    this.scrollStartY = touch.clientY;
-                    this.lastScrollY = this.currentScrollY;
-                    hallContent.classList.add('scrolling');
-                    console.log('📱 Scroll gesture started - distance:', distance, 'vertical');
+                    console.log('📱 Pan gesture started - distance:', distance, 'deltaX:', deltaX, 'deltaY:', deltaY);
                 }
                 
                 if (this.isPanning) {
@@ -242,35 +226,6 @@ class StudentTicketingSystem {
                     console.log('📱 Pan move - deltaX:', deltaX, 'deltaY:', deltaY, 'currentPanX:', this.currentPanX, 'currentPanY:', this.currentPanY);
                 }
                 
-                if (this.isScrolling) {
-                    // Calculate new scroll position
-                    const newScrollY = this.lastScrollY + deltaY;
-                    
-                    // Apply scroll boundaries
-                    const hallLayout = document.getElementById('hallLayout');
-                    const hallContent = document.getElementById('hallContent');
-                    const layoutRect = hallLayout.getBoundingClientRect();
-                    const contentRect = hallContent.getBoundingClientRect();
-                    
-                    // Calculate scroll boundaries based on content height
-                    const maxScrollY = Math.max(0, contentRect.height - layoutRect.height);
-                    const minScrollY = 0;
-                    
-                    this.currentScrollY = Math.max(minScrollY, Math.min(maxScrollY, newScrollY));
-                    
-                    // Calculate scroll velocity for momentum
-                    const currentTime = Date.now();
-                    const timeDelta = currentTime - this.lastPanTime;
-                    if (timeDelta > 0) {
-                        this.scrollVelocityY = deltaY / timeDelta;
-                    }
-                    this.lastPanTime = currentTime;
-                    
-                    this.updateScrollTransform();
-                    
-                    console.log('📱 Scroll move - deltaY:', deltaY, 'currentScrollY:', this.currentScrollY);
-                }
-                
                 e.preventDefault(); // Prevent scrolling
             }
         }, { passive: false });
@@ -289,29 +244,26 @@ class StudentTicketingSystem {
                 }, 300);
             }
             
-            // Reset pan and scroll state
+            // Reset pan state
             if (this.touches.length === 0) {
                 this.isPanning = false;
-                this.isScrolling = false;
                 this.recentlyPanned = true;
-                hallContent.classList.remove('panning', 'scrolling');
+                hallContent.classList.remove('panning');
                 
                 // Start momentum animation if there's velocity
                 if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
                     this.startMomentumAnimation();
                 }
                 
-                // Start scroll momentum animation if there's scroll velocity
-                if (Math.abs(this.scrollVelocityY) > 0.1) {
-                    this.startScrollMomentumAnimation();
-                }
+                // Set cooldown to prevent accidental taps after gestures
+                this.ignoreTapUntil = Date.now() + 300;
                 
                 // Reset recentlyPanned flag after cooldown
                 setTimeout(() => {
                     this.recentlyPanned = false;
                 }, 300);
                 
-                console.log('📱 Touch ended - pan and scroll state reset');
+                console.log('📱 Touch ended - pan state reset');
             }
             
             // Check if this is a tap on a seat (not a drag, pinch, or pan)
@@ -322,8 +274,8 @@ class StudentTicketingSystem {
                     { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
                 );
                 
-                // Only handle as seat selection if it's a quick tap (not a drag, pinch, or pan)
-                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched && !this.recentlyPanned) {
+                // Only handle as seat selection if it's a quick tap (not a drag, pinch, or pan) and not in cooldown
+                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.recentlyPinched && !this.recentlyPanned && Date.now() > this.ignoreTapUntil) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('📱 Mobile seat tap detected:', e.target);
@@ -351,7 +303,7 @@ class StudentTicketingSystem {
                     { clientX: e.clientX, clientY: e.clientY }
                 );
                 
-                if (pointerDuration < 500 && pointerDistance < this.dragThreshold) {
+                if (pointerDuration < 500 && pointerDistance < this.dragThreshold && Date.now() > this.ignoreTapUntil) {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('👆 Pointer tap detected:', e.target);
@@ -893,7 +845,6 @@ class StudentTicketingSystem {
         this.currentZoom = 1;
         this.currentPanX = 0;
         this.currentPanY = 0;
-        this.currentScrollY = 0;
         this.updateTransform();
     }
 
@@ -911,16 +862,6 @@ class StudentTicketingSystem {
         console.log('📱 Transform updated - panX:', this.currentPanX, 'panY:', this.currentPanY, 'zoom:', this.currentZoom);
     }
     
-    // Update scroll transform for vertical scrolling
-    updateScrollTransform() {
-        const hallContent = document.getElementById('hallContent');
-        if (!hallContent) return;
-        
-        // Apply vertical scroll transform
-        hallContent.style.transform = `translate(${this.currentPanX}px, ${this.currentPanY + this.currentScrollY}px) scale(${this.currentZoom})`;
-        
-        console.log('📱 Scroll transform updated - scrollY:', this.currentScrollY);
-    }
 
     // Smooth pan update using requestAnimationFrame
     smoothUpdateTransform() {
@@ -977,6 +918,9 @@ class StudentTicketingSystem {
         this.isDragging = false;
         document.getElementById('hallLayout').style.cursor = 'grab';
         
+        // Set cooldown to prevent accidental taps after gestures
+        this.ignoreTapUntil = Date.now() + 300;
+        
         // Start momentum animation for desktop drag
         if (Math.abs(this.velocityX) > 0.1 || Math.abs(this.velocityY) > 0.1) {
             this.startMomentumAnimation();
@@ -1026,45 +970,6 @@ class StudentTicketingSystem {
         this.momentumAnimationId = requestAnimationFrame(animate);
     }
     
-    // Start scroll momentum animation for smooth vertical scrolling
-    startScrollMomentumAnimation() {
-        if (this.scrollAnimationId) {
-            cancelAnimationFrame(this.scrollAnimationId);
-        }
-        
-        const friction = 0.95; // Friction coefficient
-        const minVelocity = 0.1; // Minimum velocity to continue animation
-        
-        const animate = () => {
-            // Apply friction
-            this.scrollVelocityY *= friction;
-            
-            // Update scroll position
-            this.currentScrollY += this.scrollVelocityY;
-            
-            // Apply scroll boundaries
-            const hallLayout = document.getElementById('hallLayout');
-            const hallContent = document.getElementById('hallContent');
-            const layoutRect = hallLayout.getBoundingClientRect();
-            const contentRect = hallContent.getBoundingClientRect();
-            
-            const maxScrollY = Math.max(0, contentRect.height - layoutRect.height);
-            const minScrollY = 0;
-            
-            this.currentScrollY = Math.max(minScrollY, Math.min(maxScrollY, this.currentScrollY));
-            
-            this.updateScrollTransform();
-            
-            // Continue animation if velocity is significant
-            if (Math.abs(this.scrollVelocityY) > minVelocity) {
-                this.scrollAnimationId = requestAnimationFrame(animate);
-            } else {
-                this.scrollAnimationId = null;
-            }
-        };
-        
-        this.scrollAnimationId = requestAnimationFrame(animate);
-    }
 
     handleWheel(e) {
         e.preventDefault();
