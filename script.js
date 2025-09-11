@@ -21,6 +21,11 @@ class StudentTicketingSystem {
         this.lastUpdateTime = Date.now();
         this.socket = null;
         
+        // Touch handling for mobile seat selection
+        this.touchStartTime = 0;
+        this.touchStartPosition = { x: 0, y: 0 };
+        this.dragThreshold = 10; // pixels of movement before considering it a drag
+        
         // Touch/pinch zoom properties
         this.touches = [];
         this.lastTouchDistance = 0;
@@ -69,10 +74,20 @@ class StudentTicketingSystem {
         
         // Touch support for seat selection on mobile
         document.getElementById('hallContent').addEventListener('touchend', (e) => {
-            // Only handle seat selection if not pinching/panning
-            if (!this.isPinching && !this.isDragging && e.target.classList.contains('seat')) {
-                e.preventDefault();
-                this.handleSeatClick(e.target, e);
+            // Check if this is a tap on a seat (not a drag or pinch)
+            if (e.target.classList.contains('seat')) {
+                const touchDuration = Date.now() - this.touchStartTime;
+                const touchDistance = this.getTouchDistance(
+                    { clientX: this.touchStartPosition.x, clientY: this.touchStartPosition.y },
+                    { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }
+                );
+                
+                // Only handle as seat selection if it's a quick tap (not a drag)
+                if (touchDuration < 300 && touchDistance < this.dragThreshold && !this.isPinching) {
+                    e.preventDefault();
+                    console.log('📱 Mobile seat tap detected:', e.target);
+                    this.handleSeatClick(e.target, e);
+                }
             }
         });
 
@@ -580,9 +595,18 @@ class StudentTicketingSystem {
         e.preventDefault();
         this.touches = Array.from(e.touches);
         
+        // Record touch start time and position for tap detection
+        this.touchStartTime = Date.now();
         if (this.touches.length === 1) {
-            // Single touch - start panning
-            this.isDragging = true;
+            this.touchStartPosition = {
+                x: this.touches[0].clientX,
+                y: this.touches[0].clientY
+            };
+        }
+        
+        if (this.touches.length === 1) {
+            // Single touch - don't set isDragging immediately, wait for movement
+            this.isDragging = false;
             this.isPinching = false;
             this.dragStart = { 
                 x: this.touches[0].clientX - this.currentPanX, 
@@ -624,12 +648,21 @@ class StudentTicketingSystem {
             
             this.lastTouchDistance = currentDistance;
             this.lastPinchCenter = currentCenter;
-        } else if (this.isDragging && this.touches.length === 1) {
-            // Handle single touch panning
+        } else if (this.touches.length === 1) {
+            // Check if this is actual dragging (not just a tap)
             const touch = this.touches[0];
-            this.currentPanX = touch.clientX - this.dragStart.x;
-            this.currentPanY = touch.clientY - this.dragStart.y;
-            this.updateTransform();
+            const distance = this.getTouchDistance(
+                { clientX: this.touchStartPosition.x, clientY: this.touchStartPosition.y },
+                { clientX: touch.clientX, clientY: touch.clientY }
+            );
+            
+            if (distance > this.dragThreshold) {
+                // This is actual dragging, not a tap
+                this.isDragging = true;
+                this.currentPanX = touch.clientX - this.dragStart.x;
+                this.currentPanY = touch.clientY - this.dragStart.y;
+                this.updateTransform();
+            }
         }
     }
 
