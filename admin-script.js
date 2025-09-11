@@ -1651,6 +1651,9 @@ ID бронирования: ${bookingId}
                 console.log('Admin panel connected to server via Socket.IO');
                 // Authenticate as admin
                 this.authenticateAsAdmin();
+                
+                // Also send identify event to ensure room assignment
+                this.socket.emit('identify', { role: 'admin' });
             });
             
             this.socket.on('disconnect', () => {
@@ -1660,6 +1663,10 @@ ID бронирования: ${bookingId}
             this.socket.on('authSuccess', (data) => {
                 console.log('✅ Admin authentication successful:', data);
                 this.adminAuthenticated = true;
+                
+                if (data.room === 'admins') {
+                    console.log('🏠 Admin joined admins room successfully');
+                }
             });
             
             this.socket.on('authError', (error) => {
@@ -1692,7 +1699,8 @@ ID бронирования: ${bookingId}
             
             // Handle real-time seat status updates from other admins
             this.socket.on('update-seat-status', (data) => {
-                console.log('Admin panel received seat status update:', data);
+                console.log('📡 Admin panel received seat status update from admins room:', data);
+                console.log('📊 Update type:', data.type, 'Data:', data.data);
                 
                 if (data.type === 'booking-created') {
                     console.log('📡 New booking created by another admin:', data.data);

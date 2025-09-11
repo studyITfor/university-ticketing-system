@@ -147,15 +147,24 @@ io.on('connection', (socket) => {
         console.log('📊 Total connected clients:', io.engine.clientsCount);
     });
     
-    // Handle role authentication
+    // Handle role authentication and room assignment
     socket.on('authenticate', (data) => {
         const { role, password } = data;
         
         if (role === 'admin' && password === 'admin123') {
             socket.data.role = 'admin';
             socket.data.authenticated = true;
-            console.log('✅ Admin authenticated:', socket.id);
-            socket.emit('authSuccess', { role: 'admin', message: 'Admin authentication successful' });
+            
+            // Join admin to the unified admins room
+            socket.join('admins');
+            console.log('✅ Admin authenticated and joined admins room:', socket.id);
+            console.log('📊 Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
+            
+            socket.emit('authSuccess', { 
+                role: 'admin', 
+                message: 'Admin authentication successful',
+                room: 'admins'
+            });
         } else if (role === 'student') {
             socket.data.role = 'student';
             socket.data.authenticated = true;
@@ -164,6 +173,15 @@ io.on('connection', (socket) => {
         } else {
             console.log('❌ Authentication failed:', socket.id, 'Role:', role);
             socket.emit('authError', { message: 'Invalid credentials' });
+        }
+    });
+    
+    // Handle identify event for room assignment (backup method)
+    socket.on('identify', (payload) => {
+        if (payload && payload.role === 'admin' && socket.data.authenticated) {
+            socket.join('admins');
+            console.log(`🔗 Socket ${socket.id} joined admins room via identify`);
+            console.log('📊 Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
         }
     });
     
@@ -268,8 +286,11 @@ io.on('connection', (socket) => {
     socket.on('booking-created', (data) => {
         console.log('📡 Booking created event received:', data);
         
-        // Broadcast to all connected clients
-        io.emit('update-seat-status', {
+        // Broadcast to all admins in the admins room
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        io.to('admins').emit('update-seat-status', {
             type: 'booking-created',
             data: data,
             timestamp: Date.now()
@@ -278,7 +299,7 @@ io.on('connection', (socket) => {
         // Also emit seat update to refresh all clients
         emitSeatUpdate();
         
-        console.log(`📡 Booking created broadcasted to ${io.engine.clientsCount} connected clients`);
+        console.log(`📡 Booking created broadcasted to ${adminCount} admin clients in admins room`);
     });
 });
 
@@ -819,8 +840,11 @@ app.post('/api/create-booking', async (req, res) => {
         bookings[bookingId] = bookingData;
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
-        // Emit booking created event to all connected clients
-        io.emit('update-seat-status', {
+        // Emit booking created event to all admins
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        io.to('admins').emit('update-seat-status', {
             type: 'booking-created',
             data: {
                 bookingId: bookingId,
@@ -832,6 +856,8 @@ app.post('/api/create-booking', async (req, res) => {
             },
             timestamp: Date.now()
         });
+        
+        console.log(`📡 API booking created broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
@@ -908,8 +934,11 @@ app.post('/api/confirm-payment', async (req, res) => {
         bookings[bookingId] = booking;
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
-        // Emit payment confirmed event to all connected clients
-        io.emit('update-seat-status', {
+        // Emit payment confirmed event to all admins
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        io.to('admins').emit('update-seat-status', {
             type: 'payment-confirmed',
             data: {
                 bookingId: bookingId,
@@ -922,6 +951,8 @@ app.post('/api/confirm-payment', async (req, res) => {
             },
             timestamp: Date.now()
         });
+        
+        console.log(`📡 Payment confirmed broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
@@ -972,8 +1003,11 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         delete bookings[bookingId];
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
-        // Emit booking deleted event to all connected clients
-        io.emit('update-seat-status', {
+        // Emit booking deleted event to all admins
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        io.to('admins').emit('update-seat-status', {
             type: 'booking-deleted',
             data: {
                 bookingId: bookingId,
@@ -985,6 +1019,8 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             },
             timestamp: Date.now()
         });
+        
+        console.log(`📡 Booking deleted broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
