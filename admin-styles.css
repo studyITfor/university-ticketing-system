@@ -615,8 +615,8 @@ body {
     pointer-events: none; /* Prevent seat clicks during pan/zoom */
 }
 
-/* Restore seat interactions after pan/zoom */
-.hall-layout-curved .seat-curved {
+/* Default seat interactions - only when not panning/zooming */
+.hall-layout-curved:not(.panning):not(.zooming) .seat-curved {
     pointer-events: auto;
 }
 

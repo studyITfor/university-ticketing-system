@@ -101,14 +101,19 @@ class AdminPanel {
     }
 
     setupTouchEvents() {
-        if (!this.hall) return;
+        if (!this.hall) {
+            console.warn('Hall element not found for touch events');
+            return;
+        }
+
+        console.log('Setting up touch events for hall element:', this.hall);
 
         // Ticket.kg style pan/zoom implementation
         let touchStartTime = 0;
         let touchStartX = 0;
         let touchStartY = 0;
         let hasMoved = false;
-        let touchMoveThreshold = 5; // pixels - even more responsive panning like Ticket.kg
+        let touchMoveThreshold = 3; // pixels - very responsive panning like Ticket.kg
         let lastPanTime = 0;
         let velocityX = 0;
         let velocityY = 0;
@@ -125,6 +130,7 @@ class AdminPanel {
 
         // Touch events
         this.hall.addEventListener('touchstart', (e) => {
+            console.log('Touch start:', e.touches.length, 'touches');
             this.lastTouchTime = Date.now();
             touchStartTime = Date.now();
             hasMoved = false;
@@ -138,6 +144,7 @@ class AdminPanel {
                 const rect = this.hall.getBoundingClientRect();
                 this.hall.style.transformOrigin = `${mid.x - rect.left}px ${mid.y - rect.top}px`;
                 this.hall.classList.add('zooming');
+                console.log('Pinch gesture started');
                 e.preventDefault();
             } else if (e.touches.length === 1) {
                 this.isPanning = true;
@@ -149,6 +156,7 @@ class AdminPanel {
                 lastPanY = e.touches[0].clientY;
                 lastPanTime = Date.now();
                 this.hall.classList.add('panning');
+                console.log('Pan gesture started');
             }
         }, { passive: false });
 
@@ -173,6 +181,7 @@ class AdminPanel {
                 this.lastDistance = dist;
                 this.constrainToBounds();
                 requestAnimationFrame(() => this.applyTransform());
+                console.log('Pinch zoom:', this.scale.toFixed(2));
                 e.preventDefault();
             } else if (this.isPanning && e.touches.length === 1 && !this.isPinching) {
                 const currentX = e.touches[0].clientX;
@@ -183,6 +192,7 @@ class AdminPanel {
                 if (deltaX > touchMoveThreshold || deltaY > touchMoveThreshold) {
                     hasMoved = true;
                     isDragging = true;
+                    console.log('Pan movement detected');
                 }
                 
                 // Calculate velocity for momentum
@@ -299,23 +309,36 @@ class AdminPanel {
         const now = Date.now();
         if (now < this.ignoreTapUntil) {
             // ignore accidental taps during/shortly after a gesture
+            console.log('Seat click ignored due to gesture cooldown');
             e.preventDefault();
             return;
         }
-        const seatEl = e.target.closest('.seat-preview-curved');
-        if (!seatEl) return;
+        
+        const seatEl = e.target.closest('.seat-curved');
+        if (!seatEl) {
+            console.log('No seat element found for click');
+            return;
+        }
+        
+        const seatId = seatEl.dataset.seatId;
+        console.log('Seat clicked:', seatId);
         
         // Prefer authoritative status from data-* attribute that the server controls
         const status = seatEl.dataset.status || seatEl.getAttribute('data-status') || 
-                     (seatEl.classList.contains('booked') ? 'booked' : 'available');
+                     (seatEl.classList.contains('booked') ? 'booked' : 'active');
         
-        if (status === 'booked' || status === 'paid' || status === 'reserved') {
+        console.log('Seat status:', status);
+        
+        if (status === 'booked' || status === 'paid' || status === 'reserved' || status === 'pending') {
             // show an "already booked/paid" modal. Do NOT open booking form.
+            console.log('Seat is not available, showing unavailable modal');
             this.showAlreadyBookedModal(seatEl);
             e.preventDefault();
             return;
         }
-        this.showSeatInfo(seatEl.dataset.seatId);
+        
+        console.log('Seat is available, showing seat info');
+        this.showSeatInfo(seatId);
     }
 
     showAlreadyBookedModal(seatEl) {
@@ -1205,11 +1228,35 @@ class AdminPanel {
 
     showSeatInfo(seatId) {
         const [table, seat] = seatId.split('-');
+        
+        // Find the seat element to get its current status
+        const seatElement = document.querySelector(`.seat-curved[data-seat-id="${seatId}"]`);
+        const seatStatus = seatElement ? seatElement.dataset.status : 'active';
+        
         const booking = Object.values(this.bookings).find(b => 
             b.table == table && b.seat == seat && b.status !== 'cancelled'
         );
         
-        if (booking) {
+        console.log('Seat info check:', { seatId, seatStatus, booking: !!booking });
+        
+        // Check seat status first (authoritative from server)
+        if (seatStatus === 'booked' || seatStatus === 'paid' || seatStatus === 'reserved' || seatStatus === 'pending') {
+            // Seat is not available - show unavailable message
+            let statusText = 'Забронировано';
+            let message = 'Это место недоступно для бронирования.';
+            
+            if (seatStatus === 'paid') {
+                statusText = 'Оплачено';
+            } else if (seatStatus === 'reserved') {
+                statusText = 'Зарезервировано';
+            } else if (seatStatus === 'pending') {
+                statusText = 'В процессе бронирования';
+                message = 'Это место забронировано, но еще не оплачено.';
+            }
+            
+            alert(`Стол ${table}, Место ${seat}\nСтатус: ${statusText}\n${message}`);
+        } else if (booking) {
+            // Fallback to booking data if seat status is not set
             let message = `Стол ${table}, Место ${seat}:\n`;
             message += `Имя: ${booking.firstName} ${booking.lastName}\n`;
             message += `Телефон: ${booking.phone}\n`;
@@ -1219,7 +1266,8 @@ class AdminPanel {
             
             alert(message);
         } else {
-            alert(`Стол ${table}, Место ${seat}: Свободно`);
+            // Seat is available
+            alert(`Стол ${table}, Место ${seat}\nСтатус: Свободно\nЭто место доступно для бронирования.`);
         }
     }
 
