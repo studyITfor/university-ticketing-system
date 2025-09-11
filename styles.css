@@ -306,6 +306,15 @@ body {
     transition: all 0.3s ease;
     background: white;
     z-index: 10;
+    /* Mobile touch improvements */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 .seat:hover {

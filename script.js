@@ -25,6 +25,10 @@ class StudentTicketingSystem {
         this.touchStartTime = 0;
         this.touchStartPosition = { x: 0, y: 0 };
         this.dragThreshold = 10; // pixels of movement before considering it a drag
+        this.touchedSeat = null; // Track which seat was touched
+        this.pointerDownSeat = null; // Track which seat had pointer down
+        this.pointerStartTime = 0;
+        this.pointerStartPosition = { x: 0, y: 0 };
         
         // Touch/pinch zoom properties
         this.touches = [];
@@ -65,17 +69,34 @@ class StudentTicketingSystem {
         hallLayout.addEventListener('touchmove', (e) => this.handleTouchMove(e));
         hallLayout.addEventListener('touchend', (e) => this.handleTouchEnd(e));
 
-        // Seat selection - both click and touch events
-        document.getElementById('hallContent').addEventListener('click', (e) => {
+        // Seat selection - comprehensive event support for all devices
+        const hallContent = document.getElementById('hallContent');
+        
+        // Click events for desktop
+        hallContent.addEventListener('click', (e) => {
             if (e.target.classList.contains('seat')) {
+                console.log('🖱️ Desktop seat click detected:', e.target);
                 this.handleSeatClick(e.target, e);
             }
         });
         
-        // Touch support for seat selection on mobile
-        document.getElementById('hallContent').addEventListener('touchend', (e) => {
-            // Check if this is a tap on a seat (not a drag or pinch)
+        // Touch events for mobile - multiple approaches for better compatibility
+        hallContent.addEventListener('touchstart', (e) => {
             if (e.target.classList.contains('seat')) {
+                console.log('📱 Mobile touch start on seat:', e.target);
+                // Store the seat element for potential tap handling
+                this.touchedSeat = e.target;
+                this.touchStartTime = Date.now();
+                this.touchStartPosition = {
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY
+                };
+            }
+        });
+        
+        hallContent.addEventListener('touchend', (e) => {
+            // Check if this is a tap on a seat (not a drag or pinch)
+            if (e.target.classList.contains('seat') && this.touchedSeat === e.target) {
                 const touchDuration = Date.now() - this.touchStartTime;
                 const touchDistance = this.getTouchDistance(
                     { clientX: this.touchStartPosition.x, clientY: this.touchStartPosition.y },
@@ -83,11 +104,41 @@ class StudentTicketingSystem {
                 );
                 
                 // Only handle as seat selection if it's a quick tap (not a drag)
-                if (touchDuration < 300 && touchDistance < this.dragThreshold && !this.isPinching) {
+                if (touchDuration < 500 && touchDistance < this.dragThreshold && !this.isPinching) {
                     e.preventDefault();
+                    e.stopPropagation();
                     console.log('📱 Mobile seat tap detected:', e.target);
                     this.handleSeatClick(e.target, e);
                 }
+                this.touchedSeat = null;
+            }
+        });
+        
+        // Pointer events for modern browsers (includes both mouse and touch)
+        hallContent.addEventListener('pointerdown', (e) => {
+            if (e.target.classList.contains('seat')) {
+                console.log('👆 Pointer down on seat:', e.target);
+                this.pointerDownSeat = e.target;
+                this.pointerStartTime = Date.now();
+                this.pointerStartPosition = { x: e.clientX, y: e.clientY };
+            }
+        });
+        
+        hallContent.addEventListener('pointerup', (e) => {
+            if (e.target.classList.contains('seat') && this.pointerDownSeat === e.target) {
+                const pointerDuration = Date.now() - this.pointerStartTime;
+                const pointerDistance = this.getTouchDistance(
+                    { clientX: this.pointerStartPosition.x, clientY: this.pointerStartPosition.y },
+                    { clientX: e.clientX, clientY: e.clientY }
+                );
+                
+                if (pointerDuration < 500 && pointerDistance < this.dragThreshold) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('👆 Pointer tap detected:', e.target);
+                    this.handleSeatClick(e.target, e);
+                }
+                this.pointerDownSeat = null;
             }
         });
 
