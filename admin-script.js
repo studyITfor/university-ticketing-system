@@ -587,6 +587,7 @@ class AdminPanel {
         document.getElementById('adminPassword').value = '';
     }
 
+<<<<<<< HEAD
     async loadBookings() {
         try {
             // Try to load from server first
@@ -636,11 +637,17 @@ class AdminPanel {
             }
         }
         
+=======
+    loadBookings() {
+        const saved = localStorage.getItem('zolotayaSeredinaBookings');
+        this.bookings = saved ? JSON.parse(saved) : {};
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         this.renderBookingsTable();
         this.renderPrebookedTable();
         this.updatePrebookedStats();
     }
 
+<<<<<<< HEAD
     async syncLocalBookings() {
         const localBookings = localStorage.getItem('zolotayaSeredinaBookings');
         if (!localBookings) return;
@@ -664,6 +671,8 @@ class AdminPanel {
         }
     }
 
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     renderBookingsTable() {
         const tbody = document.getElementById('bookingsTableBody');
         tbody.innerHTML = '';
@@ -785,12 +794,20 @@ class AdminPanel {
                 }
 
                 // Call backend API
+<<<<<<< HEAD
                 const response = await fetch(`/api/bookings/${bookingId}/confirm`, {
+=======
+                const response = await fetch('/api/confirm-payment', {
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
+<<<<<<< HEAD
                     body: JSON.stringify({ confirmedBy: 'admin' })
+=======
+                    body: JSON.stringify({ bookingId: bookingId })
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 });
 
                 const result = await response.json();
@@ -943,11 +960,16 @@ class AdminPanel {
                 }
 
                 // Call backend API
+<<<<<<< HEAD
                 const response = await fetch(`/api/bookings/${bookingId}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
                     }
+=======
+                const response = await fetch(`/api/delete-booking/${bookingId}`, {
+                    method: 'DELETE'
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 });
 
                 const result = await response.json();
@@ -2193,6 +2215,7 @@ ID бронирования: ${bookingId}
                 this.handlePrebookResult(result);
             });
             
+<<<<<<< HEAD
             // Listen for booking events
             this.socket.on('booking:created', (data) => {
                 console.log('📝 New booking created:', data);
@@ -2209,6 +2232,8 @@ ID бронирования: ${bookingId}
                 this.loadBookings(); // Reload all bookings
             });
             
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
             // Handle real-time seat status updates from other admins
             this.socket.on('update-seat-status', (data) => {
                 console.log('📡 Admin panel received seat status update from admins room:', data);

@@ -16,14 +16,21 @@
     "media-typer": "^1.1.0",
     "multer": "^1.4.5-lts.1",
     "pdf-lib": "^1.17.1",
+<<<<<<< HEAD
     "pg": "^8.11.3",
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     "playwright": "^1.55.0",
     "qrcode": "^1.5.3",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.7.5",
+<<<<<<< HEAD
     "sqlite3": "^5.1.6",
     "undici": "^6.0.0",
     "uuid": "^9.0.1"
+=======
+    "undici": "^6.0.0"
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
   },
   "engines": {
     "node": ">=18.0.0",

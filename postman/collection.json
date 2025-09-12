@@ -63,6 +63,7 @@
       ]
     },
     {
+<<<<<<< HEAD
       "name": "Booking Management (Centralized)",
       "item": [
         {
@@ -247,6 +248,12 @@
       "item": [
         {
           "name": "Create New Booking (Legacy)",
+=======
+      "name": "Booking Management",
+      "item": [
+        {
+          "name": "Create New Booking",
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "POST",
             "header": [
@@ -269,12 +276,20 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "create-booking"]
             },
+<<<<<<< HEAD
             "description": "Create a new booking using legacy API (redirects to centralized)"
+=======
+            "description": "Create a new booking for selected seats"
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         },
         {
+<<<<<<< HEAD
           "name": "Confirm Payment (Legacy)",
+=======
+          "name": "Confirm Payment",
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "POST",
             "header": [
@@ -297,12 +312,20 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "confirm-payment"]
             },
+<<<<<<< HEAD
             "description": "Confirm payment for a booking using legacy API"
+=======
+            "description": "Confirm payment for a booking"
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         },
         {
+<<<<<<< HEAD
           "name": "Delete Booking (Legacy)",
+=======
+          "name": "Delete Booking",
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "DELETE",
             "header": [],
@@ -311,6 +334,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "delete-booking", "{{bookingId}}"]
             },
+<<<<<<< HEAD
             "description": "Delete a booking by ID using legacy API (redirects to centralized)"
           },
           "response": []
@@ -326,6 +350,9 @@
               "path": ["api", "bookings-legacy"]
             },
             "description": "Get bookings from legacy JSON file storage"
+=======
+            "description": "Delete a booking by ID"
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         }
@@ -421,6 +448,7 @@
       ]
     },
     {
+<<<<<<< HEAD
       "name": "Concurrency Testing",
       "item": [
         {
@@ -482,6 +510,8 @@
       ]
     },
     {
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
       "name": "WebSocket Testing",
       "item": [
         {
@@ -513,12 +543,15 @@
       "value": "BOOKING_ID_FROM_CREATE_RESPONSE",
       "disabled": false,
       "description": "Booking ID obtained from create booking response"
+<<<<<<< HEAD
     },
     {
       "key": "concurrentSeatId",
       "value": "2-1",
       "disabled": false,
       "description": "Seat ID for concurrent testing"
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     }
   ],
   "event": [
@@ -549,12 +582,17 @@
           "});",
           "",
           "// For booking creation, extract booking ID",
+<<<<<<< HEAD
           "if ((pm.info.requestName === 'Create New Booking (Centralized)' || pm.info.requestName === 'Create New Booking (Legacy)') && pm.response.code === 201) {",
+=======
+          "if (pm.info.requestName === 'Create New Booking' && pm.response.code === 201) {",
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "    const responseJson = pm.response.json();",
           "    if (responseJson.bookingId) {",
           "        pm.variables.set('bookingId', responseJson.bookingId);",
           "        console.log('Booking ID saved:', responseJson.bookingId);",
           "    }",
+<<<<<<< HEAD
           "}",
           "",
           "// For 409 conflict testing",
@@ -563,6 +601,8 @@
           "    pm.test('Conflict response is correct', function () {",
           "        pm.expect(pm.response.code).to.equal(409);",
           "    });",
+=======
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "}"
         ]
       }

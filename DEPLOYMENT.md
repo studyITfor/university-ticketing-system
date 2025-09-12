@@ -47,6 +47,7 @@ git push -u origin main
 2. Click "Sign Up" or "Login"
 3. Sign up with your GitHub account
 
+<<<<<<< HEAD
 ### 2.2 Set Up Database (PostgreSQL)
 
 1. In your Railway project, click "New"
@@ -56,6 +57,9 @@ git push -u origin main
 5. Copy the `DATABASE_URL` for later use
 
 ### 2.3 Create New Project
+=======
+### 2.2 Create New Project
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 1. Click "New Project"
 2. Select "Deploy from GitHub repo"
@@ -152,6 +156,7 @@ railway status
 railway variables
 ```
 
+<<<<<<< HEAD
 ## 🗄️ Step 6: Set Up Centralized Booking System
 
 ### 6.1 Run Database Migrations
@@ -181,6 +186,9 @@ railway run node scripts/migrate-to-centralized.js migrate
 3. Check that real-time updates work with the centralized system
 
 ## 📊 Step 7: Monitoring
+=======
+## 📊 Step 6: Monitoring
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ### 6.1 Railway Dashboard
 
@@ -233,6 +241,7 @@ If you encounter issues:
 
 - [ ] Git repository created and pushed to GitHub
 - [ ] Railway project created and connected to GitHub
+<<<<<<< HEAD
 - [ ] PostgreSQL database service created
 - [ ] Environment variables set (`NODE_ENV=production`, `PORT=3000`, `DATABASE_URL`)
 - [ ] Application deployed successfully
@@ -247,6 +256,17 @@ If you encounter issues:
 - [ ] Database persistence verified
 - [ ] Postman collection tested successfully
 - [ ] Concurrency testing completed
+=======
+- [ ] Environment variables set (`NODE_ENV=production`, `PORT=3000`)
+- [ ] Application deployed successfully
+- [ ] Domain generated and accessible
+- [ ] API endpoints responding correctly
+- [ ] WebSocket connections working
+- [ ] Real-time updates functioning
+- [ ] Admin panel accessible
+- [ ] Student interface accessible
+- [ ] Postman collection tested successfully
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ---
 

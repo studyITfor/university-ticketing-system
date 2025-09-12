@@ -60,6 +60,7 @@ bookingId: (will be set automatically after creating a booking)
    - Response contains array of seat objects with statuses
    - Each seat has: `id`, `status`, `table`, `seat`
 
+<<<<<<< HEAD
 ## 📝 Step 4: Test Centralized Booking Management
 
 ### 4.1 Create New Booking (Centralized)
@@ -78,6 +79,23 @@ bookingId: (will be set automatically after creating a booking)
      "price": 5900,
      "status": "pending",
      "bookingDate": "2024-01-15T10:30:00.000Z"
+=======
+## 📝 Step 4: Test Booking Management
+
+### 4.1 Create New Booking
+
+1. Select "Booking Management" → "Create New Booking"
+2. Review the request body (modify if needed):
+   ```json
+   {
+     "fullName": "John Doe",
+     "email": "john@university.edu",
+     "phone": "+1234567890",
+     "ticketType": "standard",
+     "ticketCount": 2,
+     "selectedSeats": ["1-1", "1-2"],
+     "totalPrice": 118
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
    }
    ```
 3. Click "Send"
@@ -86,6 +104,7 @@ bookingId: (will be set automatically after creating a booking)
    - Response contains `bookingId`
    - Note the `bookingId` for next tests
 
+<<<<<<< HEAD
 ### 4.2 Get All Bookings
 
 1. Select "Booking Management (Centralized)" → "Get All Bookings"
@@ -165,11 +184,18 @@ bookingId: (will be set automatically after creating a booking)
 
 1. Select "Legacy Booking Management" → "Confirm Payment (Legacy)"
 2. Ensure `bookingId` variable is set
+=======
+### 4.2 Confirm Payment
+
+1. Select "Booking Management" → "Confirm Payment"
+2. Update the `bookingId` variable with the ID from step 4.1
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 3. Click "Send"
 4. **Expected Result:**
    - Status: 200 OK
    - Response confirms payment was processed
 
+<<<<<<< HEAD
 ### 5.3 Delete Booking (Legacy)
 
 1. Select "Legacy Booking Management" → "Delete Booking (Legacy)"
@@ -206,6 +232,16 @@ bookingId: (will be set automatically after creating a booking)
    - Only one booking should succeed
    - Others should return 409 Conflict
    - This tests transaction handling
+=======
+### 4.3 Delete Booking
+
+1. Select "Booking Management" → "Delete Booking"
+2. Ensure `bookingId` variable is set
+3. Click "Send"
+4. **Expected Result:**
+   - Status: 200 OK
+   - Response confirms booking was deleted
+>>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ## 👨‍💼 Step 5: Test Admin Functions
 
