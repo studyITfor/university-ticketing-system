@@ -107,15 +107,33 @@ function emitSeatUpdate() {
             statusCounts: statusCounts
         };
         
+        // Emit seat update to ALL connected clients (both admins and students)
+        console.log('📡 Emitting seatUpdate event to all clients...');
         io.emit('seatUpdate', updateData);
         
-        // Also emit individual seat status updates for real-time updates
-        Object.entries(seatStatuses).forEach(([seatId, status]) => {
-            io.emit('update-seat-status', {
-                seatId: seatId,
-                status: status,
-                timestamp: Date.now()
+        console.log('📡 Emitting update-seat-status event to all clients...');
+        io.emit('update-seat-status', updateData);
+        
+        // Also emit specifically to admins room for admin-specific updates
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        if (adminCount > 0) {
+            console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+            io.to('admins').emit('admin:seat-update', {
+                ...updateData,
+                adminNotification: true
             });
+        }
+        
+        console.log('✅ Seat update events emitted successfully');
+        console.log(`📊 Total connected clients: ${io.engine.clientsCount}`);
+        console.log(`📊 Admin clients in room: ${adminCount}`);
+        console.log(`📊 Event data:`, {
+            success: updateData.success,
+            totalSeats: updateData.totalSeats,
+            statusCounts: updateData.statusCounts,
+            timestamp: new Date(updateData.timestamp).toISOString()
         });
         
         console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
@@ -1483,18 +1501,57 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
 app.post('/api/test/emit-seat-update', (req, res) => {
     try {
         console.log('🧪 Manual seat update triggered via API');
+        console.log('📊 Current connected clients:', io.engine.clientsCount);
+        
+        // Get room information
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        console.log('📊 Admin clients in room:', adminCount);
+        
+        // Emit seat update
         emitSeatUpdate();
         
         res.json({
             success: true,
             message: 'Seat update emitted to all connected clients',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            connectedClients: io.engine.clientsCount,
+            adminClients: adminCount
         });
     } catch (error) {
         console.error('Error emitting test seat update:', error);
         res.status(500).json({ 
             error: 'Failed to emit seat update',
             details: error.message 
+        });
+    }
+});
+
+// Test endpoint to check Socket.IO room status
+app.get('/api/test/socket-status', (req, res) => {
+    try {
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        const status = {
+            connectedClients: io.engine.clientsCount,
+            adminClients: adminCount,
+            rooms: Array.from(io.sockets.adapter.rooms.keys()),
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log('📊 Socket.IO Status:', status);
+        
+        res.json({
+            success: true,
+            data: status
+        });
+    } catch (error) {
+        console.error('Error getting socket status:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get socket status'
         });
     }
 });

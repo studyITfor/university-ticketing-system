@@ -1060,6 +1060,26 @@ class StudentTicketingSystem {
                     console.log('📊 Bulk update - Total seats:', data.totalSeats || Object.keys(data.seatStatuses).length);
                 }
             });
+
+            // Handle update-seat-status events (same as seatUpdate but with different event name)
+            this.socket.on('update-seat-status', (data) => {
+                this.socketStatus.totalUpdates++;
+                this.socketStatus.lastUpdateTime = new Date().toISOString();
+                console.log('📡 Received update-seat-status from server:', data);
+                console.log('📊 Total updates received:', this.socketStatus.totalUpdates);
+                
+                // Show update notification in UI
+                this.showUpdateNotification(data);
+                
+                // Handle the seat update immediately
+                this.handleSeatUpdate(data);
+                
+                // Log seat status changes for debugging
+                if (data.seatStatuses) {
+                    console.log('📊 Seat status distribution:', data.statusCounts || 'Not provided');
+                    console.log('📊 Total seats:', data.totalSeats || Object.keys(data.seatStatuses).length);
+                }
+            });
             
             // Handle seat selection events from other clients
             this.socket.on('seatSelection', (data) => {
@@ -1834,8 +1854,56 @@ Socket.IO Diagnostics:
 
 // Initialize the system when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    new StudentTicketingSystem();
+    const system = new StudentTicketingSystem();
+    // Initialize seating plan image zoom functionality
+    initializeSeatingPlanImage();
 });
+
+// Initialize seating plan image zoom functionality
+function initializeSeatingPlanImage() {
+    const image = document.getElementById('seatingPlanImage');
+    if (!image) return;
+
+    let isZoomed = false;
+
+    image.addEventListener('click', () => {
+        if (isZoomed) {
+            // Zoom out
+            image.classList.remove('zoomed');
+            isZoomed = false;
+        } else {
+            // Zoom in
+            image.classList.add('zoomed');
+            isZoomed = true;
+        }
+    });
+
+    // Double-tap to zoom on mobile
+    let lastTap = 0;
+    image.addEventListener('touchend', (e) => {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTap;
+        if (tapLength < 500 && tapLength > 0) {
+            e.preventDefault();
+            if (isZoomed) {
+                image.classList.remove('zoomed');
+                isZoomed = false;
+            } else {
+                image.classList.add('zoomed');
+                isZoomed = true;
+            }
+        }
+        lastTap = currentTime;
+    });
+
+    // Close zoom when clicking outside
+    document.addEventListener('click', (e) => {
+        if (isZoomed && !image.contains(e.target)) {
+            image.classList.remove('zoomed');
+            isZoomed = false;
+        }
+    });
+}
 
 // Touch support is now handled by the StudentTicketingSystem class
 // The global touch handlers are removed to allow proper pinch-to-zoom functionality

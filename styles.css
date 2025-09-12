@@ -171,6 +171,60 @@ body {
     font-size: 1.5rem;
 }
 
+/* Seating Plan Image Section */
+.seating-plan-section {
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.seating-plan-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.seating-plan-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    cursor: zoom-in;
+    transition: transform 0.3s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.seating-plan-image:hover {
+    transform: scale(1.02);
+}
+
+.seating-plan-image.zoomed {
+    cursor: zoom-out;
+    transform: scale(1.5);
+    position: relative;
+    z-index: 1000;
+}
+
+.seating-plan-caption {
+    font-size: 0.9rem;
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+}
+
+/* Interactive Tables Section */
+.interactive-tables-section {
+    width: 100%;
+    position: relative;
+}
+
 /* Tables Container - Static Layout */
 .tables-container {
     width: 100%;
@@ -731,6 +785,30 @@ body {
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 1rem;
         padding: 1rem;
+    }
+    
+    /* Mobile seating plan image */
+    .seating-plan-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+    }
+    
+    .seating-plan-caption {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+    }
+    
+    /* Ensure 6-8 tables are visible on mobile */
+    .table {
+        min-height: 80px;
+        padding: 8px;
+    }
+    
+    .seat {
+        width: 30px;
+        height: 30px;
+        font-size: 0.7rem;
     }
     
     .table {

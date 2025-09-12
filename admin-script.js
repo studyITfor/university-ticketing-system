@@ -401,6 +401,8 @@ class AdminPanel {
         this.generateHallPreview();
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
+        // Initialize seating plan image zoom functionality
+        this.initializeSeatingPlanImage();
     }
 
     setupEventListeners() {
@@ -2169,6 +2171,52 @@ ID бронирования: ${bookingId}
         } catch (error) {
             console.error('Error initializing Socket.IO in admin panel:', error);
         }
+    }
+
+    // Initialize seating plan image zoom functionality
+    initializeSeatingPlanImage() {
+        const image = document.getElementById('seatingPlanImage');
+        if (!image) return;
+
+        let isZoomed = false;
+
+        image.addEventListener('click', () => {
+            if (isZoomed) {
+                // Zoom out
+                image.classList.remove('zoomed');
+                isZoomed = false;
+            } else {
+                // Zoom in
+                image.classList.add('zoomed');
+                isZoomed = true;
+            }
+        });
+
+        // Double-tap to zoom on mobile
+        let lastTap = 0;
+        image.addEventListener('touchend', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            if (tapLength < 500 && tapLength > 0) {
+                e.preventDefault();
+                if (isZoomed) {
+                    image.classList.remove('zoomed');
+                    isZoomed = false;
+                } else {
+                    image.classList.add('zoomed');
+                    isZoomed = true;
+                }
+            }
+            lastTap = currentTime;
+        });
+
+        // Close zoom when clicking outside
+        document.addEventListener('click', (e) => {
+            if (isZoomed && !image.contains(e.target)) {
+                image.classList.remove('zoomed');
+                isZoomed = false;
+            }
+        });
     }
     
     authenticateAsAdmin() {
