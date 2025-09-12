@@ -76,9 +76,14 @@ jspm_packages/
 dist
 
 # Gatsby files
-.cache/
+# Игнорируем кэш, логи и лишние папки
+node_modules
+npm-debug.log
+
+# Игнорируем всё в public кроме images
 public/*
 !public/images/
+
 
 # Storybook build outputs
 .out
