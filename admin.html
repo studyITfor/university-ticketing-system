@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель - GOLDENMIDDLE</title>
+    <link rel="stylesheet" href="admin-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <h1><i class="fas fa-lock"></i> Админ-панель</h1>
+                    <p>GOLDENMIDDLE - Управление бронированиями</p>
+                </div>
+                <form class="login-form" id="loginForm">
+                    <div class="form-group">
+                        <label for="adminPassword">Пароль администратора</label>
+                        <input type="password" id="adminPassword" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Войти
+                    </button>
+                </form>
+                <div class="login-error" id="loginError" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Неверный пароль
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div class="admin-dashboard" id="adminDashboard" style="display: none;">
+        <!-- Header -->
+        <header class="admin-header">
+            <div class="container">
+                <h1 class="admin-title">
+                    <i class="fas fa-cog"></i>
+                    Админ-панель
+                </h1>
+                <div class="admin-actions">
+                    <button class="btn btn-secondary" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Выйти
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <div class="container">
+                <!-- Statistics Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalBookings">0</h3>
+                            <p>Всего бронирований</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="pendingPayments">0</h3>
+                            <p>Ожидают оплаты</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="confirmedPayments">0</h3>
+                            <p>Оплачено</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-chair"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="availableSeats">504</h3>
+                            <p>Доступно мест</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="admin-controls">
+                    <div class="control-group">
+                        <button class="btn btn-primary" id="prebookSeats">
+                            <i class="fas fa-lock"></i>
+                            Предзабронировать места
+                        </button>
+                        <button class="btn btn-warning" id="clearPrebooked">
+                            <i class="fas fa-unlock"></i>
+                            Освободить предзабронированные
+                        </button>
+                        <button class="btn btn-info" id="refreshData">
+                            <i class="fas fa-sync"></i>
+                            Обновить данные
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bookings Table -->
+                <div class="bookings-section">
+                    <div class="section-header">
+                        <h2>Управление бронированиями</h2>
+                        <div class="table-controls">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="searchBookings" placeholder="Поиск по имени или телефону...">
+                            </div>
+                            <select id="statusFilter">
+                                <option value="all">Все статусы</option>
+                                <option value="pending">Ожидают оплаты</option>
+                                <option value="paid">Оплачено</option>
+                                <option value="cancelled">Отменено</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="bookings-table" id="bookingsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Имя</th>
+                                    <th>Телефон</th>
+                                    <th>Email</th>
+                                    <th>Место</th>
+                                    <th>Статус</th>
+                                    <th>Дата бронирования</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookingsTableBody">
+                                <!-- Bookings will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pre-booked Seats Section -->
+                <div class="prebooked-seats-section">
+                    <div class="section-header">
+                        <h2>Предварительно забронированные места</h2>
+                        <div class="prebooked-controls">
+                            <button class="btn btn-warning" id="clearAllPrebooked">
+                                <i class="fas fa-trash"></i>
+                                Очистить все предзабронированные
+                            </button>
+                            <button class="btn btn-info" id="refreshPrebooked">
+                                <i class="fas fa-sync"></i>
+                                Обновить
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="prebooked-stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalPrebookedSeats">0</div>
+                            <div class="stat-label">Всего предзабронировано</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="manualPrebookedSeats">0</div>
+                            <div class="stat-label">Ручной выбор</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="randomPrebookedSeats">0</div>
+                            <div class="stat-label">Случайный выбор</div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="prebooked-table" id="prebookedTable">
+                            <thead>
+                                <tr>
+                                    <th>Место</th>
+                                    <th>Тип бронирования</th>
+                                    <th>Дата создания</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prebookedTableBody">
+                                <!-- Pre-booked seats will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Ticket Verification Section -->
+                <div class="ticket-verification">
+                    <div class="section-header">
+                        <h2>Проверка билетов</h2>
+                        <div class="verification-controls">
+                            <button class="btn btn-info" id="refreshVerification">
+                                <i class="fas fa-sync"></i>
+                                Обновить
+                            </button>
+                            <button class="btn btn-success" id="addTicketManually">
+                                <i class="fas fa-plus"></i>
+                                Добавить билет
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="verification-form">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" id="ticketInput" placeholder="Введите ID билета или отсканируйте QR-код" autocomplete="off">
+                                <button class="btn btn-primary" id="verifyTicket">
+                                    <i class="fas fa-search"></i>
+                                    Проверить
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="verification-result" id="verificationResult" style="display: none;">
+                            <div class="result-content">
+                                <div class="result-icon" id="resultIcon"></div>
+                                <div class="result-text">
+                                    <h4 id="resultTitle"></h4>
+                                    <p id="resultMessage"></p>
+                                    <div class="result-details" id="resultDetails" style="display: none;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="verification-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Проверено сегодня:</span>
+                            <span class="stat-value" id="verifiedToday">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Действительных:</span>
+                            <span class="stat-value" id="validTickets">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Недействительных:</span>
+                            <span class="stat-value" id="invalidTickets">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hall Layout Management -->
+                <div class="hall-management">
+                    <div class="section-header">
+                        <h2>Схема зала</h2>
+                        <div class="hall-controls">
+                            <button class="btn btn-info" id="refreshHall">
+                                <i class="fas fa-sync"></i>
+                                Обновить схему
+                            </button>
+                            <button class="btn btn-warning" id="manualReserve">
+                                <i class="fas fa-lock"></i>
+                                Забронировать место
+                            </button>
+                            <button class="btn btn-success" id="manualRelease">
+                                <i class="fas fa-unlock"></i>
+                                Освободить место
+                            </button>
+                            <button class="btn btn-danger" id="releaseAllSeats">
+                                <i class="fas fa-trash-alt"></i>
+                                Освободить все места
+                            </button>
+                            <button class="btn btn-info" id="prebookSelectedSeats">
+                                <i class="fas fa-hand-paper"></i>
+                                Забронировать выбранные
+                            </button>
+                            <div class="zoom-controls">
+                                <button id="zoomOut" title="Уменьшить">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <span class="zoom-level" id="zoomLevel">100%</span>
+                                <button id="zoomIn" title="Увеличить">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button id="zoomReset" title="Сбросить масштаб">
+                                    <i class="fas fa-expand-arrows-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hall-preview">
+                        <!-- Seating Plan Image Section -->
+                        <div class="seating-plan-section">
+                            <div class="seating-plan-container">
+                                <img src="/images/hall.png" alt="План зала от администрации ресторана" class="seating-plan-image" id="seatingPlanImage" onerror="this.src='/images/seating-plan-fallback.png'">
+                                <div class="seating-plan-caption">
+                                    План зала от администрации ресторана
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Interactive Tables Section -->
+                        <div class="interactive-tables-section">
+                            <div class="stage-preview">
+                                <i class="fas fa-microphone"></i>
+                                <span>СЦЕНА</span>
+                            </div>
+                            <div class="hall-layout-preview" id="hallLayoutPreview">
+                                <!-- Hall layout will be generated here -->
+                            </div>
+                        </div>
+                        <div class="hall-legend">
+                            <div class="legend-item">
+                                <div class="seat-sample available"></div>
+                                <span>Свободно</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="seat-sample pending"></div>
+                                <span>Ожидает подтверждения</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="seat-sample reserved"></div>
+                                <span>Забронировано (оплачено)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="seat-sample prebooked"></div>
+                                <span>Забронировано организатором</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seat Selection Interface -->
+                    <div class="seat-selection-interface">
+                        <h3><i class="fas fa-mouse-pointer"></i> Выбор мест для предварительного бронирования</h3>
+                        <div class="selection-controls">
+                            <div class="selection-input">
+                                <label for="seatInput">Введите номера мест (через запятую):</label>
+                                <input type="text" id="seatInput" placeholder="1-1, 1-2, 2-5, 3-10" />
+                                <button class="btn btn-sm btn-primary" id="addSeatsFromInput">
+                                    <i class="fas fa-plus"></i>
+                                    Добавить
+                                </button>
+                            </div>
+                            <div class="selected-seats-display">
+                                <label>Выбранные места:</label>
+                                <div id="selectedSeatsList" class="selected-seats-list">
+                                    <span class="no-seats">Нет выбранных мест</span>
+                                </div>
+                                <div class="selection-actions">
+                                    <button class="btn btn-sm btn-success" id="clearSelection">
+                                        <i class="fas fa-times"></i>
+                                        Очистить выбор
+                                    </button>
+                                    <button class="btn btn-sm btn-info" id="prebookSelected">
+                                        <i class="fas fa-hand-paper"></i>
+                                        Забронировать выбранные
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Manual Ticket Addition Modal -->
+    <div class="modal" id="addTicketModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Добавить билет вручную</h3>
+                <button class="close-btn" id="closeAddTicketModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form class="add-ticket-form" id="addTicketForm">
+                    <div class="form-group">
+                        <label for="ticketId">ID билета *</label>
+                        <input type="text" id="ticketId" name="ticketId" placeholder="TKMFCEZV2YEI7DSN" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="holderName">Имя держателя *</label>
+                        <input type="text" id="holderName" name="holderName" placeholder="Иван Иванов" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="table">Стол *</label>
+                        <input type="number" id="table" name="table" placeholder="1" min="1" max="36" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="seat">Место *</label>
+                        <input type="number" id="seat" name="seat" placeholder="5" min="1" max="14" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Статус</label>
+                        <select id="status" name="status">
+                            <option value="active">Активный</option>
+                            <option value="pending">Ожидает подтверждения</option>
+                            <option value="reserved">Забронировано</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelAddTicket">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Добавить билет</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Confirmation Modal -->
+    <div class="modal" id="paymentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение оплаты</h3>
+                <button class="close-btn" id="closePaymentModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="booking-details" id="paymentBookingDetails">
+                    <!-- Booking details will be populated -->
+                </div>
+                <div class="payment-actions">
+                    <button class="btn btn-success" id="confirmPayment">
+                        <i class="fas fa-check"></i>
+                        Подтвердить оплату
+                    </button>
+                    <button class="btn btn-danger" id="cancelBooking">
+                        <i class="fas fa-times"></i>
+                        Отменить бронирование
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticket Generation Modal -->
+    <div class="modal" id="ticketModal">
+        <div class="modal-content ticket-content">
+            <div class="modal-header">
+                <h3>Электронный билет</h3>
+                <button class="close-btn" id="closeTicketModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="ticket" id="generatedTicket">
+                    <div class="ticket-header">
+                        <h2>Золотая середина</h2>
+                        <p>Университетское мероприятие</p>
+                    </div>
+                    <div class="ticket-body">
+                        <div class="ticket-info">
+                            <div class="info-row">
+                                <span class="label">Имя:</span>
+                                <span class="value" id="ticketName">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Дата:</span>
+                                <span class="value">5 октября 2025</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Время:</span>
+                                <span class="value">19:00</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Место:</span>
+                                <span class="value" id="ticketSeat">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">ID билета:</span>
+                                <span class="value" id="ticketId">-</span>
+                            </div>
+                        </div>
+                        <div class="qr-code">
+                            <div id="qrcode"></div>
+                            <p class="qr-note">QR-код одноразового использования</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="ticket-actions">
+                    <button class="btn btn-primary" id="sendTicket">
+                        <i class="fas fa-envelope"></i>
+                        Отправить на email
+                    </button>
+                    <button class="btn btn-secondary" id="downloadTicket">
+                        <i class="fas fa-download"></i>
+                        Скачать билет
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple protection - check if user is trying to access admin panel directly
+        if (window.location.pathname.includes('admin') || window.location.href.includes('admin')) {
+            // Allow admin panel access
+        } else {
+            // Redirect to main page if accessed incorrectly
+            window.location.href = 'index.html';
+        }
+    </script>
+    <script src="admin-script.js"></script>
+</body>
+</html>

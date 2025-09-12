@@ -1,0 +1,18 @@
+{
+  "BKMFGBSEQY": {
+    "firstName": "Asylbek",
+    "lastName": "Aitbaev",
+    "phone": "+996507224140",
+    "email": "asylbek_aitbaev@mail.ru",
+    "seatId": "3-1",
+    "table": 3,
+    "seat": 1,
+    "price": 5900,
+    "status": "Оплачен",
+    "bookingDate": "2025-09-12T04:16:45.226Z",
+    "id": "BKMFGBSEQY",
+    "paymentDate": "2025-09-12T04:52:00.316Z",
+    "paymentConfirmedBy": "admin",
+    "ticketId": "TKMFGD1QRG"
+  }
+}
