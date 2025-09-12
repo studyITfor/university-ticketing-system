@@ -1862,7 +1862,20 @@ document.addEventListener('DOMContentLoaded', () => {
 // Initialize seating plan image zoom functionality
 function initializeSeatingPlanImage() {
     const image = document.getElementById('seatingPlanImage');
-    if (!image) return;
+    if (!image) {
+        console.warn('Seating plan image element not found');
+        return;
+    }
+
+    // Add error handling for image loading
+    image.addEventListener('error', (e) => {
+        console.warn('Failed to load seating plan image:', e.target.src);
+        console.log('Attempting to load fallback image...');
+    });
+
+    image.addEventListener('load', () => {
+        console.log('Seating plan image loaded successfully:', image.src);
+    });
 
     let isZoomed = false;
 

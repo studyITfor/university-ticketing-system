@@ -35,6 +35,8 @@ const PORT = process.env.PORT || config.server.port || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure tickets directory exists
 const ticketsDir = path.join(__dirname, 'tickets');
