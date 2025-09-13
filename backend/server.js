@@ -781,7 +781,7 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
         // Send message first
         const messageData = {
             chatId: chatId,
-            message: `🎫 Здравствуйте, ${bookingData.firstName}!\n\nВаш золотой билет на GOLDENMIDDLE готов!\n\n📅 Дата: 26 октября\n⏰ Время: 18:00\n📍 Место: Асман\n🪑 Ваше место: Стол ${bookingData.table}, Место ${bookingData.seat}\n💵 Цена: 5900 Сом\n🆔 ID билета: ${ticketId}\n\nБилет во вложении. Покажите его при входе на мероприятие!`
+            message: `🎫 Здравствуйте, ${bookingData.firstName}!\n\nВаш золотой билет на GOLDENMIDDLE готов!\n\n📅 Дата: 26 октября\n⏰ Время: 18:00\n📍 Место: Асман\n🪑 Ваше место: Стол ${bookingData.table}, Место ${bookingData.seat}\n💵 Цена: 5500 Сом\n🆔 ID билета: ${ticketId}\n\nБилет во вложении. Покажите его при входе на мероприятие!`
         };
 
         console.log('📤 Отправляем текстовое сообщение...');
@@ -1277,7 +1277,7 @@ app.post('/api/secure-tickets/generate', async (req, res) => {
             eventDate: eventDate || '2025-10-26',
             eventTime: eventTime || '18:00',
             eventVenue: eventVenue || 'Асман',
-            price: price || 5900,
+            price: price || 5500,
             currency: currency || 'Сом'
         };
 

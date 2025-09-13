@@ -4,7 +4,7 @@ class StudentTicketingSystem {
         this.totalTables = 36;
         this.seatsPerTable = 14;
         this.totalSeats = this.totalTables * this.seatsPerTable;
-        this.ticketPrice = 5900;
+        this.ticketPrice = 5500;
         this.selectedSeats = new Set();
         this.bookedSeats = new Set();
         this.prebookedSeats = new Set();

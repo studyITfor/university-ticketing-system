@@ -19,6 +19,6 @@ module.exports = {
         date: '26 октября 2025',
         time: '18:00',
         venue: 'Асман',
-        price: 5900
+        price: 5500
     }
 };
