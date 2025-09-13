@@ -1566,9 +1566,25 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
     }
 });
 
-// Test endpoint to manually trigger seat updates
+// Helper function to check if request is from admin
+function isAdminRequest(req) {
+    // Check for admin role in headers or query params
+    const adminRole = req.headers['x-user-role'] || req.query.role;
+    return adminRole === 'admin';
+}
+
+// Test endpoint to manually trigger seat updates (Admin only)
 app.post('/api/test/emit-seat-update', (req, res) => {
     try {
+        // Check if request is from admin
+        if (!isAdminRequest(req)) {
+            return res.status(403).json({ 
+                success: false,
+                error: 'Access denied',
+                message: 'This endpoint is only available to administrators'
+            });
+        }
+        
         console.log('🧪 Manual seat update triggered via API');
         console.log('📊 Current connected clients:', io.engine.clientsCount);
         
@@ -1597,9 +1613,18 @@ app.post('/api/test/emit-seat-update', (req, res) => {
     }
 });
 
-// Test endpoint to check Socket.IO room status
+// Test endpoint to check Socket.IO room status (Admin only)
 app.get('/api/test/socket-status', (req, res) => {
     try {
+        // Check if request is from admin
+        if (!isAdminRequest(req)) {
+            return res.status(403).json({ 
+                success: false,
+                error: 'Access denied',
+                message: 'This endpoint is only available to administrators'
+            });
+        }
+        
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
         const adminCount = adminsRoom ? adminsRoom.size : 0;
         
@@ -1625,9 +1650,18 @@ app.get('/api/test/socket-status', (req, res) => {
     }
 });
 
-// Test endpoint to get Socket.IO connection info
+// Test endpoint to get Socket.IO connection info (Admin only)
 app.get('/api/test/socket-info', (req, res) => {
     try {
+        // Check if request is from admin
+        if (!isAdminRequest(req)) {
+            return res.status(403).json({ 
+                success: false,
+                error: 'Access denied',
+                message: 'This endpoint is only available to administrators'
+            });
+        }
+        
         const connectedClients = io.engine.clientsCount;
         
         res.json({

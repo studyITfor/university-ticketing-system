@@ -2358,5 +2358,8 @@ ID бронирования: ${bookingId}
 // Initialize admin panel
 let adminPanel;
 document.addEventListener('DOMContentLoaded', () => {
+    // Set admin role for this session
+    localStorage.setItem('userRole', 'admin');
+    
     adminPanel = new AdminPanel();
 });

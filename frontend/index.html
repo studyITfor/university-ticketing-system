@@ -130,8 +130,8 @@
                         </div>
                     </div>
 
-                    <!-- Test Panel Toggle -->
-                    <button class="test-toggle" onclick="toggleTestPanel()" title="Toggle Test Panel">
+                    <!-- Test Panel Toggle (Admin Only) -->
+                    <button class="test-toggle" id="testToggleButton" onclick="toggleTestPanel()" title="Toggle Test Panel" style="display: none;">
                         🔧
                     </button>
                 </div>
@@ -302,16 +302,40 @@
         // Global reference to student system for test panel
         let studentSystem;
         
-        // Toggle test panel visibility
+        // Toggle test panel visibility (Admin only)
         function toggleTestPanel() {
+            // Check if user is admin
+            if (!isAdmin()) {
+                alert('❌ Access denied. This feature is only available to administrators.');
+                return;
+            }
+            
             const panel = document.getElementById('testPanel');
             const isVisible = panel.style.display !== 'none';
             panel.style.display = isVisible ? 'none' : 'block';
         }
         
+        // Check if user is admin (simple check based on URL or localStorage)
+        function isAdmin() {
+            // Check if we're on admin page
+            if (window.location.pathname.includes('admin')) {
+                return true;
+            }
+            // Check localStorage for admin flag
+            return localStorage.getItem('userRole') === 'admin';
+        }
+        
         // Initialize student system and make it globally accessible
         document.addEventListener('DOMContentLoaded', () => {
             studentSystem = new StudentTicketingSystem();
+            
+            // Show test panel only for admins
+            if (isAdmin()) {
+                const testToggleButton = document.getElementById('testToggleButton');
+                if (testToggleButton) {
+                    testToggleButton.style.display = 'block';
+                }
+            }
         });
     </script>
     

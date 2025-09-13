@@ -1494,6 +1494,7 @@ Socket.IO Diagnostics:
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-User-Role': 'admin' // Add admin role header
                 }
             });
 
