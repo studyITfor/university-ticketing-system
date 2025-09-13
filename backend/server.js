@@ -1670,6 +1670,15 @@ app.get('/api/health', (req, res) => {
     }
 });
 
+// Simple test endpoint
+app.get('/api/test-health', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "Test health endpoint working",
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Test endpoint to get Socket.IO connection info (Admin only)
 app.get('/api/test/socket-info', (req, res) => {
     try {
