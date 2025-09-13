@@ -12,6 +12,7 @@ const { Blob } = require('buffer');
 const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
+const WhatsAppFallbackSystem = require('./whatsapp-fallback');
 const { 
     sequelize, 
     Booking, 
@@ -62,6 +63,9 @@ const secureTicketSystem = new SecureTicketSystem(
     config.tickets?.secretKey || 'default-secret-key-change-in-production',
     path.join(__dirname, '../secure-tickets-database.json')
 );
+
+// Initialize WhatsApp fallback system
+const whatsappFallback = new WhatsAppFallbackSystem();
 
 // Function to emit seat updates to all connected clients
 async function emitSeatUpdate() {
@@ -1196,6 +1200,15 @@ app.post('/api/confirm-payment', async (req, res) => {
                 totalDuration: whatsappResult.totalDuration,
                 lastError: whatsappResult.lastError
             });
+            
+            // Try fallback system for failed WhatsApp delivery
+            try {
+                console.log(`🔄 Attempting fallback delivery for booking ${bookingId}...`);
+                await whatsappFallback.handleFailedDelivery(booking, ticketPath, whatsappResult.lastError);
+                console.log(`✅ Fallback delivery initiated for booking ${bookingId}`);
+            } catch (fallbackError) {
+                console.error(`❌ Fallback system also failed for booking ${bookingId}:`, fallbackError);
+            }
         }
         
         // Emit payment confirmed event to all admins
