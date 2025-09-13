@@ -65,6 +65,7 @@ const secureTicketSystem = new SecureTicketSystem(
 );
 
 // Initialize WhatsApp fallback system
+const { WhatsAppFallbackSystem } = require('./whatsapp-fallback');
 const whatsappFallback = new WhatsAppFallbackSystem();
 
 // Function to emit seat updates to all connected clients
