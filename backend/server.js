@@ -1017,13 +1017,29 @@ app.post('/api/confirm-payment', async (req, res) => {
         const ticketPath = path.join(ticketsDir, ticketFileName);
         fs.writeFileSync(ticketPath, pdfBuffer);
         
-        // Send WhatsApp ticket
-        await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
-            firstName: booking.studentName.split(' ')[0],
-            lastName: booking.studentName.split(' ').slice(1).join(' '),
-            table: booking.tableNumber,
-            seat: booking.seatNumber
-        });
+        // Validate phone number format before sending WhatsApp
+        const phoneNumber = booking.phone;
+        if (!phoneNumber || !phoneNumber.startsWith('+996')) {
+            console.warn(`⚠️ Invalid phone number format for booking ${bookingId}: ${phoneNumber}. Skipping WhatsApp send.`);
+            return res.status(400).json({ 
+                error: 'Invalid phone number format',
+                message: 'Номер телефона должен начинаться с +996 для отправки билета в WhatsApp'
+            });
+        }
+
+        // Send WhatsApp ticket (don't fail payment confirmation if WhatsApp fails)
+        try {
+            await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
+                firstName: booking.studentName.split(' ')[0],
+                lastName: booking.studentName.split(' ').slice(1).join(' '),
+                table: booking.tableNumber,
+                seat: booking.seatNumber
+            });
+            console.log('✅ WhatsApp ticket sent successfully');
+        } catch (whatsappError) {
+            console.error('❌ WhatsApp sending failed, but payment confirmed:', whatsappError.message);
+            // Don't fail the payment confirmation if WhatsApp fails
+        }
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1073,15 +1089,28 @@ app.post('/api/confirm-payment', async (req, res) => {
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
+        console.log(`🔍 Attempting to delete booking with ID: ${bookingId}`);
         
-        // Find the booking in the database
-        const booking = await Booking.findOne({
+        // Find the booking in the database - try both ticketId and id fields
+        let booking = await Booking.findOne({
             where: { ticketId: bookingId, isActive: true },
             include: [{
                 model: Seat,
                 as: 'Seats'
             }]
         });
+        
+        // If not found by ticketId, try by id (in case frontend sends the wrong ID)
+        if (!booking) {
+            console.log(`🔍 Not found by ticketId, trying by id: ${bookingId}`);
+            booking = await Booking.findOne({
+                where: { id: bookingId, isActive: true },
+                include: [{
+                    model: Seat,
+                    as: 'Seats'
+                }]
+            });
+        }
         
         if (!booking) {
             return res.status(404).json({ 
@@ -1091,12 +1120,13 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             });
         }
         
-        // Check if booking is paid
-        if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
-            return res.status(400).json({ 
+        // Check if booking is paid - only block non-admin users
+        const isAdmin = isAdminRequest(req);
+        if (!isAdmin && (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен')) {
+            return res.status(403).json({ 
                 success: false,
                 error: 'Cannot delete paid booking',
-                message: 'Нельзя удалить оплаченное бронирование'
+                message: 'Нельзя удалить оплаченное бронирование. Только администраторы могут удалять оплаченные бронирования.'
             });
         }
         

@@ -638,10 +638,10 @@ class AdminPanel {
                                 <i class="fas fa-ticket-alt"></i> Билет
                             </button>
                         ` : ''}
-                        <button class="btn btn-danger ${booking.status === 'paid' ? 'disabled' : ''}" 
-                                onclick="${booking.status === 'paid' ? 'alert(\'❌ Нельзя удалить оплаченное бронирование!\')' : `adminPanel.deleteBooking('${booking.id}')`}"
-                                ${booking.status === 'paid' ? 'disabled title="Нельзя удалить оплаченное бронирование"' : ''}>
-                            <i class="fas fa-trash"></i> ${booking.status === 'paid' ? 'Заблокировано' : 'Удалить'}
+                        <button class="btn btn-danger" 
+                                onclick="adminPanel.deleteBooking('${booking.id}')"
+                                title="${booking.status === 'paid' ? 'Удалить оплаченное бронирование (только для администраторов)' : 'Удалить бронирование'}">
+                            <i class="fas fa-trash"></i> Удалить
                         </button>
                         ${booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен' ? `
                             <button class="btn btn-warning" onclick="adminPanel.forceReleaseBooking('${booking.id}')" title="Принудительно освободить место (только для администраторов)">
@@ -885,11 +885,8 @@ class AdminPanel {
         
         const booking = this.bookings[bookingId];
         
-        // Check if booking is paid
-        if (booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
-            alert('❌ Нельзя удалить оплаченное бронирование!\n\nОплаченные бронирования можно только отменить через специальную процедуру.');
-            return;
-        }
+        // Note: Admin can delete any booking, including paid ones
+        // The backend will handle the authorization check
         
         if (confirm(`Удалить бронирование для ${booking.firstName} ${booking.lastName} (Стол ${booking.table}, Место ${booking.seat})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
             try {
@@ -900,9 +897,12 @@ class AdminPanel {
                     deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Удаление...';
                 }
 
-                // Call backend API
+                // Call backend API with admin role header
                 const response = await fetch(`/api/delete-booking/${bookingId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'X-User-Role': 'admin'
+                    }
                 });
 
                 const result = await response.json();

@@ -450,10 +450,15 @@ class StudentTicketingSystem {
         if (!data.lastName || !data.lastName?.trim()) errors.push('Фамилия обязательна');
         if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
 
-        // Phone validation
-        const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-        if (data.phone && !phoneRegex.test(data.phone.replace(/\s/g, ''))) {
-            errors.push('Пожалуйста, введите корректный номер телефона');
+        // Phone validation - must start with +996
+        if (data.phone && !data.phone.startsWith('+996')) {
+            errors.push('Номер телефона должен начинаться с +996 (например: +996 777 123 456)');
+        }
+        
+        // Additional phone format validation
+        const phoneRegex = /^\+996\s?\d{3}\s?\d{3}\s?\d{3}$/;
+        if (data.phone && !phoneRegex.test(data.phone)) {
+            errors.push('Пожалуйста, введите корректный номер телефона в формате +996 XXX XXX XXX');
         }
 
         if (errors.length > 0) {
@@ -1847,6 +1852,81 @@ document.addEventListener('DOMContentLoaded', () => {
     const system = new StudentTicketingSystem();
     // Initialize seating plan image zoom functionality
     initializeSeatingPlanImage();
+    
+    // Add phone number input masking
+    const phoneInput = document.getElementById('phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Remove all non-digits
+            
+            // If it doesn't start with 996, add it
+            if (value && !value.startsWith('996')) {
+                value = '996' + value;
+            }
+            
+            // Format as +996 XXX XXX XXX
+            if (value.length > 3) {
+                value = '+996 ' + value.substring(3).replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+            } else if (value.length > 0) {
+                value = '+996 ' + value.substring(3);
+            }
+            
+            e.target.value = value;
+        });
+        
+        // Ensure it starts with +996 when focused
+        phoneInput.addEventListener('focus', function(e) {
+            if (!e.target.value.startsWith('+996')) {
+                e.target.value = '+996 ';
+            }
+        });
+    }
+    
+    // Add payment confirmation functionality
+    const confirmPaymentBtn = document.getElementById('confirmPayment');
+    if (confirmPaymentBtn) {
+        confirmPaymentBtn.addEventListener('click', async function() {
+            const bookingId = document.getElementById('confirmedBookingId')?.textContent;
+            if (!bookingId) {
+                alert('Ошибка: ID бронирования не найден');
+                return;
+            }
+            
+            try {
+                confirmPaymentBtn.disabled = true;
+                confirmPaymentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обработка...';
+                
+                const response = await fetch('/api/confirm-payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ bookingId: bookingId })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Оплата подтверждена! Билет отправлен в WhatsApp на ваш номер телефона.');
+                    // Close the modal
+                    const modal = document.getElementById('confirmationModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                    }
+                    // Refresh the page to update seat statuses
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка: ' + (result.message || result.error || 'Не удалось подтвердить оплату'));
+                }
+            } catch (error) {
+                console.error('Error confirming payment:', error);
+                alert('❌ Ошибка при подтверждении оплаты. Попробуйте еще раз.');
+            } finally {
+                confirmPaymentBtn.disabled = false;
+                confirmPaymentBtn.innerHTML = '<i class="fas fa-check"></i> Я оплатил';
+            }
+        });
+    }
 });
 
 // Initialize seating plan image zoom functionality
