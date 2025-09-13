@@ -49,7 +49,7 @@ const Booking = sequelize.define('Booking', {
   },
   email: {
     type: Sequelize.STRING,
-    allowNull: false
+    allowNull: true
   },
   phone: {
     type: Sequelize.STRING,

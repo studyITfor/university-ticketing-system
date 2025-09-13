@@ -623,7 +623,6 @@ class AdminPanel {
                 <td>${booking.id}</td>
                 <td>${booking.firstName} ${booking.lastName}</td>
                 <td>${booking.phone}</td>
-                <td>${booking.email}</td>
                 <td>Стол ${booking.table}, Место ${booking.seat}</td>
                 <td><span class="status-badge status-${booking.status}">${this.getStatusText(booking.status)}</span></td>
                 <td>${new Date(booking.bookingDate).toLocaleDateString('ru-RU')}</td>
@@ -665,7 +664,7 @@ class AdminPanel {
                 booking.firstName.toLowerCase().includes(searchTerm) ||
                 booking.lastName.toLowerCase().includes(searchTerm) ||
                 booking.phone.includes(searchTerm) ||
-                booking.email.toLowerCase().includes(searchTerm);
+                false; // Email field removed
 
             const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
 
@@ -702,10 +701,6 @@ class AdminPanel {
             <div class="detail-row">
                 <span class="label">Телефон:</span>
                 <span class="value">${this.currentBooking.phone}</span>
-            </div>
-            <div class="detail-row">
-                <span class="label">Email:</span>
-                <span class="value">${this.currentBooking.email}</span>
             </div>
             <div class="detail-row">
                 <span class="label">Место:</span>
@@ -843,9 +838,9 @@ class AdminPanel {
     sendTicket() {
         if (!this.currentBooking) return;
 
-        // In a real application, this would send an email
+        // In a real application, this would send the ticket
         // For demo purposes, we'll just show a success message
-        alert(`Билет отправлен на email: ${this.currentBooking.email}`);
+        alert(`Билет отправлен успешно!`);
         
         // Mark ticket as sent
         this.currentBooking.ticketSent = true;
@@ -1394,7 +1389,6 @@ class AdminPanel {
             let message = `Стол ${table}, Место ${seat}:\n`;
             message += `Имя: ${booking.firstName} ${booking.lastName}\n`;
             message += `Телефон: ${booking.phone}\n`;
-            message += `Email: ${booking.email}\n`;
             message += `Статус: ${this.getStatusText(booking.status)}\n`;
             message += `Дата бронирования: ${new Date(booking.bookingDate).toLocaleString('ru-RU')}`;
             
@@ -1441,7 +1435,6 @@ class AdminPanel {
             firstName: name,
             lastName: 'Организатор',
             phone: '000-000-0000',
-            email: 'admin@event.com',
             table: tableNum,
             seat: seatNum,
             seatId: seatId,

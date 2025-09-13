@@ -303,13 +303,11 @@ class StudentTicketingSystem {
         const firstNameInput = document.getElementById('firstName');
         const lastNameInput = document.getElementById('lastName');
         const phoneInput = document.getElementById('phone');
-        const emailInput = document.getElementById('email');
         
         console.log('🔍 DEBUG: Input elements:');
         console.log('  firstName:', firstNameInput?.value);
         console.log('  lastName:', lastNameInput?.value);
         console.log('  phone:', phoneInput?.value);
-        console.log('  email:', emailInput?.value);
         
         const formData = new FormData(form);
         
@@ -323,7 +321,6 @@ class StudentTicketingSystem {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
             phone: formData.get('phone'),
-            email: formData.get('email'),
             seatId: this.currentBookingSeat,
             table: this.currentBookingSeat.split('-')[0],
             seat: this.currentBookingSeat.split('-')[1],
@@ -447,19 +444,11 @@ class StudentTicketingSystem {
             firstName: `"${data.firstName}" (type: ${typeof data.firstName})`,
             lastName: `"${data.lastName}" (type: ${typeof data.lastName})`,
             phone: `"${data.phone}" (type: ${typeof data.phone})`,
-            email: `"${data.email}" (type: ${typeof data.email})`
         });
 
         if (!data.firstName || !data.firstName?.trim()) errors.push('Имя обязательно');
         if (!data.lastName || !data.lastName?.trim()) errors.push('Фамилия обязательна');
         if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
-        if (!data.email || !data.email?.trim()) errors.push('Электронная почта обязательна');
-
-        // Email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (data.email && !emailRegex.test(data.email)) {
-            errors.push('Пожалуйста, введите корректный адрес электронной почты');
-        }
 
         // Phone validation
         const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
