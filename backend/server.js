@@ -1075,18 +1075,49 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
         
-        // Load bookings
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
+        // Find the booking in the database
+        const booking = await Booking.findOne({
+            where: { ticketId: bookingId, isActive: true },
+            include: [{
+                model: Seat,
+                as: 'Seats'
+            }]
+        });
         
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        const booking = bookings[bookingId];
         if (!booking) {
-            return res.status(404).json({ error: 'Бронирование не найдено' });
+            return res.status(404).json({ 
+                success: false,
+                error: 'Booking not found',
+                message: 'Бронирование не найдено или уже удалено'
+            });
         }
+        
+        // Check if booking is paid
+        if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Cannot delete paid booking',
+                message: 'Нельзя удалить оплаченное бронирование'
+            });
+        }
+        
+        // Store booking data before deletion for event emission
+        const deletedBooking = {
+            id: booking.ticketId,
+            table: booking.tableNumber,
+            seat: booking.seatNumber,
+            firstName: booking.studentName.split(' ')[0],
+            lastName: booking.studentName.split(' ').slice(1).join(' '),
+            paymentStatus: booking.paymentStatus
+        };
+        
+        // Delete associated seats first
+        await Seat.destroy({
+            where: { bookingId: booking.id }
+        });
+        
+        // Mark booking as inactive instead of deleting
+        await booking.update({ isActive: false });
         
         // Delete ticket file if exists
         if (booking.ticketId) {
@@ -1095,13 +1126,6 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
                 fs.unlinkSync(ticketPath);
             }
         }
-        
-        // Store booking data before deletion for event emission
-        const deletedBooking = { ...booking };
-        
-        // Remove booking
-        delete bookings[bookingId];
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
         // Emit booking deleted event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');

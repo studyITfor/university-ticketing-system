@@ -639,8 +639,10 @@ class AdminPanel {
                                 <i class="fas fa-ticket-alt"></i> Билет
                             </button>
                         ` : ''}
-                        <button class="btn btn-danger" onclick="adminPanel.deleteBooking('${booking.id}')">
-                            <i class="fas fa-trash"></i> Удалить
+                        <button class="btn btn-danger ${booking.status === 'paid' ? 'disabled' : ''}" 
+                                onclick="${booking.status === 'paid' ? 'alert(\'❌ Нельзя удалить оплаченное бронирование!\')' : `adminPanel.deleteBooking('${booking.id}')`}"
+                                ${booking.status === 'paid' ? 'disabled title="Нельзя удалить оплаченное бронирование"' : ''}>
+                            <i class="fas fa-trash"></i> ${booking.status === 'paid' ? 'Заблокировано' : 'Удалить'}
                         </button>
                     </div>
                 </td>
@@ -876,9 +878,19 @@ class AdminPanel {
     }
 
     async deleteBooking(bookingId) {
-        if (!this.bookings[bookingId]) return;
+        if (!this.bookings[bookingId]) {
+            alert('❌ Бронирование не найдено в локальных данных');
+            return;
+        }
         
         const booking = this.bookings[bookingId];
+        
+        // Check if booking is paid
+        if (booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
+            alert('❌ Нельзя удалить оплаченное бронирование!\n\nОплаченные бронирования можно только отменить через специальную процедуру.');
+            return;
+        }
+        
         if (confirm(`Удалить бронирование для ${booking.firstName} ${booking.lastName} (Стол ${booking.table}, Место ${booking.seat})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
             try {
                 // Show loading state
@@ -912,7 +924,20 @@ class AdminPanel {
                     // Show confirmation message
                     alert(`✅ Бронирование удалено!\n\nМесто ${seatInfo} освобождено и доступно для нового бронирования.\n\nКлиент: ${customerName}`);
                 } else {
-                    throw new Error(result.error || 'Ошибка при удалении бронирования');
+                    // Handle specific error cases
+                    if (result.error === 'Booking not found') {
+                        alert('❌ Бронирование уже удалено или не найдено');
+                        // Remove from local data if it exists
+                        delete this.bookings[bookingId];
+                        this.saveBookings();
+                        this.renderBookingsTable();
+                        this.updateStatistics();
+                        this.generateHallPreview();
+                    } else if (result.error === 'Cannot delete paid booking') {
+                        alert('❌ Нельзя удалить оплаченное бронирование!\n\nОплаченные бронирования можно только отменить через специальную процедуру.');
+                    } else {
+                        throw new Error(result.message || result.error || 'Ошибка при удалении бронирования');
+                    }
                 }
             } catch (error) {
                 console.error('Error deleting booking:', error);
