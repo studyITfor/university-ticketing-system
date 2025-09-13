@@ -30,7 +30,7 @@ class WhatsAppFallbackSystem {
     
     initializeEmail() {
         try {
-            this.transporter = nodemailer.createTransporter(this.emailConfig);
+            this.transporter = nodemailer.createTransport(this.emailConfig);
             console.log('📧 Email fallback system initialized');
         } catch (error) {
             console.warn('⚠️ Email fallback system not available:', error.message);

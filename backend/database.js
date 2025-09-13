@@ -2,7 +2,8 @@ const { Sequelize } = require('sequelize');
 
 // Database configuration - use SQLite for local development, PostgreSQL for production
 const isProduction = process.env.NODE_ENV === 'production';
-const databaseUrl = process.env.DATABASE_URL;
+// Use DATABASE_PUBLIC_URL for IPv4 accessibility in production
+const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
 
 let sequelize;
 
