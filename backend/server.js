@@ -17,6 +17,7 @@ const {
     Booking, 
     Seat, 
     AdminSession, 
+    DeletionLog,
     initializeDatabase, 
     closeDatabase 
 } = require('./database');
@@ -1087,9 +1088,18 @@ app.post('/api/confirm-payment', async (req, res) => {
 
 // Delete booking
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
+    let transaction;
     try {
         const { bookingId } = req.params;
+        const userIp = req.ip || req.connection.remoteAddress;
+        const isAdmin = isAdminRequest(req);
+        const allowPaidDelete = config.deletion.allowPaidDeletion;
+        
         console.log(`🔍 Attempting to delete booking with ID: ${bookingId}`);
+        console.log(`👤 User IP: ${userIp}, Admin: ${isAdmin}, AllowPaidDelete: ${allowPaidDelete}`);
+        
+        // Start transaction for atomic operations
+        transaction = await sequelize.transaction();
         
         // Find the booking in the database - try both ticketId and id fields
         let booking = await Booking.findOne({
@@ -1097,7 +1107,8 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             include: [{
                 model: Seat,
                 as: 'Seats'
-            }]
+            }],
+            transaction
         });
         
         // If not found by ticketId, try by id (in case frontend sends the wrong ID)
@@ -1108,11 +1119,13 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
                 include: [{
                     model: Seat,
                     as: 'Seats'
-                }]
+                }],
+                transaction
             });
         }
         
         if (!booking) {
+            await transaction.rollback();
             return res.status(404).json({ 
                 success: false,
                 error: 'Booking not found',
@@ -1120,10 +1133,56 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             });
         }
         
-        // Allow any user to delete any booking regardless of payment status
-        console.log(`✅ Booking deletion allowed for user: ${req.ip}, booking status: ${booking.paymentStatus}`);
+        // Check authorization for paid bookings
+        const isPaid = booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен';
+        if (isPaid && !isAdmin && !allowPaidDelete) {
+            await transaction.rollback();
+            return res.status(403).json({ 
+                success: false,
+                error: 'Cannot delete paid booking',
+                message: 'Нельзя удалить оплаченное бронирование. Только администраторы могут удалять оплаченные бронирования.'
+            });
+        }
         
-        // Store booking data before deletion for event emission
+        console.log(`✅ Booking deletion authorized for user: ${userIp}, booking status: ${booking.paymentStatus}`);
+        
+        // Create comprehensive backup of booking data
+        const bookingBackup = {
+            id: booking.id,
+            ticketId: booking.ticketId,
+            studentName: booking.studentName,
+            studentId: booking.studentId,
+            phone: booking.phone,
+            tableNumber: booking.tableNumber,
+            seatNumber: booking.seatNumber,
+            bookingTime: booking.bookingTime,
+            paymentStatus: booking.paymentStatus,
+            isActive: booking.isActive,
+            createdAt: booking.createdAt,
+            updatedAt: booking.updatedAt,
+            seats: booking.Seats ? booking.Seats.map(seat => ({
+                id: seat.id,
+                tableNumber: seat.tableNumber,
+                seatNumber: seat.seatNumber,
+                isBooked: seat.isBooked,
+                bookingId: seat.bookingId
+            })) : []
+        };
+        
+        // Log deletion for audit trail
+        await DeletionLog.create({
+            bookingId: booking.id,
+            ticketId: booking.ticketId,
+            userId: req.headers['x-user-id'] || null,
+            userIp: userIp,
+            isAdmin: isAdmin,
+            bookingData: JSON.stringify(bookingBackup),
+            reason: isPaid ? 'Paid booking deletion' : 'Regular booking deletion'
+        }, { transaction });
+        
+        console.log(`📝 Deletion logged for booking ${booking.ticketId} by ${isAdmin ? 'admin' : 'user'} from ${userIp}`);
+        
+        // Store booking data for event emission
         const deletedBooking = {
             id: booking.ticketId,
             table: booking.tableNumber,
@@ -1133,37 +1192,47 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             paymentStatus: booking.paymentStatus
         };
         
-        // Delete associated seats first
-        await Seat.destroy({
-            where: { bookingId: booking.id }
-        });
+        // Update associated seats to available
+        if (booking.Seats && booking.Seats.length > 0) {
+            await Promise.all(booking.Seats.map(seat =>
+                seat.update({ isBooked: false, bookingId: null }, { transaction })
+            ));
+        }
         
-        // Mark booking as inactive instead of deleting
-        await booking.update({ isActive: false });
+        // Mark booking as inactive (soft delete)
+        await booking.update({ isActive: false }, { transaction });
         
         // Delete ticket file if exists
         if (booking.ticketId) {
             const ticketPath = path.join(ticketsDir, `${booking.ticketId}.pdf`);
             if (fs.existsSync(ticketPath)) {
-                fs.unlinkSync(ticketPath);
+                try {
+                    fs.unlinkSync(ticketPath);
+                    console.log(`🗑️ Deleted ticket file: ${ticketPath}`);
+                } catch (fileError) {
+                    console.warn(`⚠️ Could not delete ticket file: ${fileError.message}`);
+                }
             }
         }
         
-        // Emit booking deleted event to all admins
-        const adminsRoom = io.sockets.adapter.rooms.get('admins');
-        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        // Commit transaction
+        await transaction.commit();
         
-        io.to('admins').emit('update-seat-status', {
-            type: 'booking-deleted',
-            data: {
-                bookingId: bookingId,
-                table: deletedBooking.table,
-                seat: deletedBooking.seat,
-                status: 'available',
-                firstName: deletedBooking.firstName,
-                lastName: deletedBooking.lastName
-            },
-            timestamp: Date.now()
+        // Emit real-time updates to all clients
+        io.to('admins').emit('bookingDeleted', booking.ticketId);
+        io.emit('seatUpdate', await getSeatStatuses());
+        
+        console.log(`✅ Booking ${booking.ticketId} deleted successfully by ${isAdmin ? 'admin' : 'user'}`);
+        
+        res.status(200).json({ 
+            success: true, 
+            message: 'Бронирование удалено',
+            deletedBooking: {
+                ticketId: booking.ticketId,
+                table: booking.tableNumber,
+                seat: booking.seatNumber,
+                wasPaid: isPaid
+            }
         });
         
         // Emit individual seat status update
@@ -1174,19 +1243,21 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             timestamp: Date.now()
         });
         
-        console.log(`📡 Booking deleted broadcasted to ${adminCount} admin clients in admins room`);
-        
-        // Emit seat update to all connected clients
-        emitSeatUpdate();
-        
-        res.json({
-            success: true,
-            message: 'Бронирование удалено'
-        });
+        console.log(`📡 Booking deleted broadcasted to all clients`);
         
     } catch (error) {
-        console.error('Error deleting booking:', error);
-        res.status(500).json({ error: 'Ошибка при удалении бронирования' });
+        // Rollback transaction if it exists
+        if (transaction) {
+            await transaction.rollback();
+            console.log(`🔄 Transaction rolled back due to error: ${error.message}`);
+        }
+        
+        console.error('❌ Error deleting booking:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Ошибка при удалении бронирования',
+            message: 'Произошла ошибка при удалении бронирования. Попробуйте еще раз.'
+        });
     }
 });
 

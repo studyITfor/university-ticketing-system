@@ -888,7 +888,36 @@ class AdminPanel {
         // Note: Admin can delete any booking, including paid ones
         // The backend will handle the authorization check
         
-        if (confirm(`Удалить бронирование для ${booking.firstName} ${booking.lastName} (Стол ${booking.table}, Место ${booking.seat})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
+        // Enhanced confirmation modal with backup info
+        const isPaid = booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен';
+        const isAdmin = localStorage.getItem('userRole') === 'admin';
+        
+        let confirmMessage = `Удалить бронирование для ${booking.firstName} ${booking.lastName}?\n\n`;
+        confirmMessage += `📋 Детали бронирования:\n`;
+        confirmMessage += `• Стол: ${booking.table}, Место: ${booking.seat}\n`;
+        confirmMessage += `• Статус: ${booking.status}\n`;
+        confirmMessage += `• ID билета: ${booking.id}\n`;
+        confirmMessage += `• Телефон: ${booking.phone}\n\n`;
+        
+        if (isPaid) {
+            confirmMessage += `⚠️ ВНИМАНИЕ: Это оплаченное бронирование!\n`;
+            confirmMessage += `• Деньги уже получены\n`;
+            confirmMessage += `• Билет отправлен клиенту\n`;
+            confirmMessage += `• Удаление необратимо\n\n`;
+        }
+        
+        confirmMessage += `Это действие:\n`;
+        confirmMessage += `• Освободит место для повторного бронирования\n`;
+        confirmMessage += `• Удалит билет из системы\n`;
+        confirmMessage += `• Запишет операцию в журнал аудита\n\n`;
+        
+        if (isAdmin) {
+            confirmMessage += `🔐 Администратор: Операция будет залогирована с вашим IP\n`;
+        }
+        
+        confirmMessage += `Вы уверены, что хотите продолжить?`;
+        
+        if (confirm(confirmMessage)) {
             try {
                 // Show loading state
                 const deleteButton = document.querySelector(`button[onclick="adminPanel.deleteBooking('${bookingId}')"]`);
@@ -908,6 +937,7 @@ class AdminPanel {
                     // Store booking details for confirmation message
                     const seatInfo = `Стол ${booking.table}, Место ${booking.seat}`;
                     const customerName = `${booking.firstName} ${booking.lastName}`;
+                    const wasPaid = result.deletedBooking?.wasPaid || isPaid;
 
                     // Remove the booking from local data
                     delete this.bookings[bookingId];
@@ -918,8 +948,20 @@ class AdminPanel {
                     this.updateStatistics();
                     this.generateHallPreview();
                     
-                    // Show confirmation message
-                    alert(`✅ Бронирование удалено!\n\nМесто ${seatInfo} освобождено и доступно для нового бронирования.\n\nКлиент: ${customerName}`);
+                    // Show enhanced confirmation message
+                    let successMessage = `✅ Бронирование успешно удалено!\n\n`;
+                    successMessage += `📋 Детали удаления:\n`;
+                    successMessage += `• Клиент: ${customerName}\n`;
+                    successMessage += `• Место: ${seatInfo}\n`;
+                    successMessage += `• ID билета: ${booking.id}\n`;
+                    successMessage += `• Статус: ${wasPaid ? 'Оплаченное' : 'Неоплаченное'}\n\n`;
+                    successMessage += `🔄 Результат:\n`;
+                    successMessage += `• Место освобождено и доступно для бронирования\n`;
+                    successMessage += `• Билет удален из системы\n`;
+                    successMessage += `• Операция залогирована в журнале аудита\n\n`;
+                    successMessage += `📊 Обновление интерфейса...`;
+                    
+                    alert(successMessage);
                 } else {
                     // Handle specific error cases
                     if (result.error === 'Booking not found') {

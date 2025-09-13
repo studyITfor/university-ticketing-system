@@ -12,6 +12,11 @@ module.exports = {
         port: process.env.PORT || 3000
     },
 
+    // Deletion Configuration
+    deletion: {
+        allowPaidDeletion: process.env.ALLOW_PAID_DELETION === 'true' || false
+    },
+
     // Event Information
     event: {
         name: 'GOLDENMIDDLE',

@@ -149,6 +149,52 @@ const AdminSession = sequelize.define('AdminSession', {
   timestamps: true
 });
 
+// DeletionLog model for audit trail
+const DeletionLog = sequelize.define('DeletionLog', {
+  id: {
+    type: Sequelize.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  bookingId: {
+    type: Sequelize.INTEGER,
+    allowNull: false
+  },
+  ticketId: {
+    type: Sequelize.STRING,
+    allowNull: false
+  },
+  userId: {
+    type: Sequelize.STRING,
+    allowNull: true
+  },
+  userIp: {
+    type: Sequelize.STRING,
+    allowNull: true
+  },
+  isAdmin: {
+    type: Sequelize.BOOLEAN,
+    defaultValue: false
+  },
+  bookingData: {
+    type: Sequelize.TEXT,
+    allowNull: false,
+    comment: 'Full booking data before deletion (JSON)'
+  },
+  reason: {
+    type: Sequelize.STRING,
+    allowNull: true,
+    defaultValue: 'User deletion'
+  },
+  deletedAt: {
+    type: Sequelize.DATE,
+    defaultValue: Sequelize.NOW
+  }
+}, {
+  tableName: 'deletion_logs',
+  timestamps: true
+});
+
 // Define associations
 Booking.hasMany(Seat, { foreignKey: 'bookingId' });
 Seat.belongsTo(Booking, { foreignKey: 'bookingId' });
@@ -185,6 +231,7 @@ module.exports = {
   Booking,
   Seat,
   AdminSession,
+  DeletionLog,
   initializeDatabase,
   closeDatabase
 };
