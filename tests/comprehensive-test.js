@@ -1,108 +1,135 @@
-const { chromium } = require('playwright');
+const { test, expect } = require('@playwright/test');
 
-async function comprehensiveTest() {
-    const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    
-    try {
-        console.log('🚀 Starting comprehensive test...');
-        
-        // Test 1: Student booking with phone validation
-        console.log('📝 Test 1: Testing student booking with phone validation...');
+test.describe('University Ticketing System - Comprehensive Test', () => {
+    test('Complete booking flow with phone validation and deletion', async ({ page }) => {
+        // Navigate to the student portal
         await page.goto('http://localhost:3000');
-        await page.waitForTimeout(2000);
         
-        // Try to fill form with invalid phone (should fail)
-        await page.fill('input[name="firstName"]', 'Test');
-        await page.fill('input[name="lastName"]', 'User');
-        await page.fill('input[name="studentId"]', '12345');
-        await page.fill('input[name="phone"]', '1234567890'); // Invalid - no +
+        // Wait for the page to load
+        await page.waitForLoadState('networkidle');
         
-        // Select a seat
-        const seat = await page.$('[data-table="1"][data-seat="2"]');
-        if (seat) {
-            await seat.click();
-            console.log('✅ Seat selected');
-        }
+        // Test phone validation - try invalid phone first
+        await page.fill('#firstName', 'Test');
+        await page.fill('#lastName', 'User');
+        await page.fill('#studentId', '12345');
+        await page.fill('#phone', '123456789'); // Invalid phone (no +)
+        await page.selectOption('#table', '1');
+        await page.selectOption('#seat', '3');
         
-        // Try to submit (should show validation error)
+        // Try to submit with invalid phone
         await page.click('button[type="submit"]');
-        await page.waitForTimeout(1000);
         
-        // Check if validation error appears
-        const hasValidationError = await page.evaluate(() => {
-            return document.body.textContent.includes('международный формат');
+        // Check for validation error
+        const errorMessage = await page.textContent('.error-message, .alert-danger, [class*="error"]');
+        expect(errorMessage).toContain('+');
+        
+        // Now test with valid phone
+        await page.fill('#phone', '+996777123456');
+        await page.click('button[type="submit"]');
+        
+        // Wait for success message
+        await page.waitForSelector('.alert-success, [class*="success"]', { timeout: 10000 });
+        
+        // Get the booking ID from the success message
+        const successMessage = await page.textContent('.alert-success, [class*="success"]');
+        const bookingIdMatch = successMessage.match(/[A-Z0-9]{10,}/);
+        expect(bookingIdMatch).toBeTruthy();
+        
+        const bookingId = bookingIdMatch[0];
+        console.log('Created booking with ID:', bookingId);
+        
+        // Navigate to admin panel
+        await page.goto('http://localhost:3000/admin.html');
+        await page.waitForLoadState('networkidle');
+        
+        // Wait for bookings to load
+        await page.waitForSelector('table tbody tr', { timeout: 10000 });
+        
+        // Find the booking in the admin panel
+        const bookingRow = page.locator(`tr:has-text("${bookingId}")`);
+        await expect(bookingRow).toBeVisible();
+        
+        // Test deletion - click delete button
+        const deleteButton = bookingRow.locator('button:has-text("Удалить"), button:has-text("Delete")');
+        await expect(deleteButton).toBeVisible();
+        
+        // Click delete and confirm
+        await deleteButton.click();
+        
+        // Handle confirmation dialog
+        page.on('dialog', async dialog => {
+            expect(dialog.type()).toBe('confirm');
+            await dialog.accept();
         });
         
-        if (hasValidationError) {
-            console.log('✅ Phone validation working - rejected invalid format');
-        } else {
-            console.log('❌ Phone validation not working');
-        }
+        // Wait for deletion success
+        await page.waitForSelector('.alert-success, [class*="success"]', { timeout: 10000 });
         
-        // Now try with valid phone
-        await page.fill('input[name="phone"]', '+1234567890');
-        await page.click('button[type="submit"]');
-        await page.waitForTimeout(2000);
+        // Verify booking is removed from table
+        await expect(bookingRow).not.toBeVisible();
         
-        console.log('✅ Booking created with valid phone');
-        
-        // Test 2: Admin panel deletion
-        console.log('🔧 Test 2: Testing admin panel deletion...');
-        await page.goto('http://localhost:3000/admin.html');
-        await page.waitForTimeout(3000);
-        
-        // Check if we can access admin panel
-        const title = await page.title();
-        console.log('📄 Admin panel title:', title);
-        
-        // Look for bookings
-        const bookingRows = await page.$$('tbody tr');
-        console.log(`📊 Found ${bookingRows.length} booking rows`);
-        
-        if (bookingRows.length > 0) {
-            // Try to delete the first booking
-            const deleteButton = await page.$('button.btn-danger');
-            if (deleteButton) {
-                console.log('🔍 Found delete button, attempting deletion...');
-                
-                // Set up dialog handler
-                page.on('dialog', async dialog => {
-                    console.log('✅ Confirmation dialog appeared:', dialog.message());
-                    await dialog.accept();
-                    console.log('✅ Confirmation accepted');
-                });
-                
-                // Click delete button
-                await deleteButton.click();
-                await page.waitForTimeout(3000);
-                
-                console.log('✅ Deletion attempt completed');
-                
-                // Check if booking was removed
-                const updatedRows = await page.$$('tbody tr');
-                console.log(`📊 After deletion: ${updatedRows.length} booking rows`);
-                
-                if (updatedRows.length < bookingRows.length) {
-                    console.log('✅ Booking successfully deleted!');
-                } else {
-                    console.log('❌ Booking was not deleted');
-                }
-            } else {
-                console.log('❌ No delete button found');
+        console.log('✅ All tests passed: phone validation, booking creation, and deletion');
+    });
+    
+    test('Test paid booking deletion', async ({ page }) => {
+        // Create a booking via API
+        const response = await page.request.post('http://localhost:3000/api/create-booking', {
+            data: {
+                firstName: 'Paid',
+                lastName: 'Test',
+                studentId: '54321',
+                phone: '+996777654321',
+                table: 2,
+                seat: 1
             }
-        } else {
-            console.log('❌ No bookings found to delete');
-        }
+        });
         
-        console.log('✅ Comprehensive test completed');
+        expect(response.ok()).toBeTruthy();
+        const bookingData = await response.json();
+        const bookingId = bookingData.bookingId;
         
-    } catch (error) {
-        console.error('❌ Test error:', error);
-    } finally {
-        await browser.close();
-    }
-}
-
-comprehensiveTest().catch(console.error);
+        // Confirm payment
+        const paymentResponse = await page.request.post('http://localhost:3000/api/confirm-payment', {
+            data: { bookingId }
+        });
+        
+        expect(paymentResponse.ok()).toBeTruthy();
+        console.log('Payment confirmed for booking:', bookingId);
+        
+        // Navigate to admin panel
+        await page.goto('http://localhost:3000/admin.html');
+        await page.waitForLoadState('networkidle');
+        
+        // Wait for bookings to load
+        await page.waitForSelector('table tbody tr', { timeout: 10000 });
+        
+        // Find the paid booking
+        const bookingRow = page.locator(`tr:has-text("${bookingId}")`);
+        await expect(bookingRow).toBeVisible();
+        
+        // Verify it shows as paid
+        const statusCell = bookingRow.locator('td').nth(6); // Assuming status is in 7th column
+        await expect(statusCell).toContainText('Оплачен');
+        
+        // Test deletion of paid booking
+        const deleteButton = bookingRow.locator('button:has-text("Удалить"), button:has-text("Delete")');
+        await expect(deleteButton).toBeVisible();
+        
+        // Click delete and confirm
+        await deleteButton.click();
+        
+        // Handle confirmation dialog
+        page.on('dialog', async dialog => {
+            expect(dialog.type()).toBe('confirm');
+            await dialog.accept();
+        });
+        
+        // Wait for deletion success
+        await page.waitForSelector('.alert-success, [class*="success"]', { timeout: 10000 });
+        
+        // Verify booking is removed
+        await expect(bookingRow).not.toBeVisible();
+        
+        console.log('✅ Paid booking deletion test passed');
+    });
+});
