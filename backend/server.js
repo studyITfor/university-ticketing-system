@@ -1658,7 +1658,7 @@ app.get('/api/health', (req, res) => {
             message: "Server is running",
             timestamp: new Date().toISOString(),
             status: "healthy",
-            version: "1.0.0"
+            version: "1.0.1"
         });
     } catch (error) {
         console.error('Error in health check:', error);
