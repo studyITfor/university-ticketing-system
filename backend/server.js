@@ -902,6 +902,7 @@ app.post('/api/create-booking', async (req, res) => {
             ticketId: bookingId,
             studentName: `${bookingData.firstName} ${bookingData.lastName}`,
             studentId: bookingData.studentId || 'N/A',
+            email: bookingData.email || 'no-email@example.com', // Temporary fallback for database compatibility
             phone: bookingData.phone,
             tableNumber: bookingData.table,
             seatNumber: bookingData.seat,
