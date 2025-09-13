@@ -1650,6 +1650,25 @@ app.get('/api/test/socket-status', (req, res) => {
     }
 });
 
+// Public health check endpoint for Railway
+app.get('/api/health', (req, res) => {
+    try {
+        res.status(200).json({
+            success: true,
+            message: "Server is running",
+            timestamp: new Date().toISOString(),
+            status: "healthy"
+        });
+    } catch (error) {
+        console.error('Error in health check:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Health check failed',
+            details: error.message 
+        });
+    }
+});
+
 // Test endpoint to get Socket.IO connection info (Admin only)
 app.get('/api/test/socket-info', (req, res) => {
     try {
