@@ -1120,15 +1120,8 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             });
         }
         
-        // Check if booking is paid - only block non-admin users
-        const isAdmin = isAdminRequest(req);
-        if (!isAdmin && (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен')) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Cannot delete paid booking',
-                message: 'Нельзя удалить оплаченное бронирование. Только администраторы могут удалять оплаченные бронирования.'
-            });
-        }
+        // Allow any user to delete any booking regardless of payment status
+        console.log(`✅ Booking deletion allowed for user: ${req.ip}, booking status: ${booking.paymentStatus}`);
         
         // Store booking data before deletion for event emission
         const deletedBooking = {

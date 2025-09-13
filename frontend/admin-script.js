@@ -897,12 +897,9 @@ class AdminPanel {
                     deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Удаление...';
                 }
 
-                // Call backend API with admin role header
+                // Call backend API to delete booking
                 const response = await fetch(`/api/delete-booking/${bookingId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-User-Role': 'admin'
-                    }
+                    method: 'DELETE'
                 });
 
                 const result = await response.json();
