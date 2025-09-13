@@ -766,79 +766,142 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
     }
 }
 
-// Send WhatsApp ticket
+// Send WhatsApp ticket with improved reliability and logging
 async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
+    const startTime = Date.now();
+    const attemptId = `WHATSAPP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
-        console.log(`📱 Начинаем отправку WhatsApp билета для ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
+        console.log(`📱 [${attemptId}] Начинаем отправку WhatsApp билета для ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
         
-        const phoneNumber = phone.replace(/[^\d]/g, '');
+        // Improved phone number processing - maintain international format
+        let phoneNumber = phone.trim();
+        if (phoneNumber.startsWith('+')) {
+            phoneNumber = phoneNumber.substring(1); // Remove + but keep the rest
+        }
+        
+        // Ensure it's a valid international number
+        if (!/^\d{10,15}$/.test(phoneNumber)) {
+            throw new Error(`Invalid phone number format: ${phone} (processed: ${phoneNumber})`);
+        }
+        
         const chatId = `${phoneNumber}@c.us`;
+        console.log(`📞 [${attemptId}] Обработанный номер телефона: ${phoneNumber}`);
+        console.log(`💬 [${attemptId}] Chat ID: ${chatId}`);
 
-        console.log(`📞 Обработанный номер телефона: ${phoneNumber}`);
-        console.log(`💬 Chat ID: ${chatId}`);
-
-        // Send message first
+        // Enhanced message with better formatting
         const messageData = {
             chatId: chatId,
-            message: `🎫 Здравствуйте, ${bookingData.firstName}!\n\nВаш золотой билет на GOLDENMIDDLE готов!\n\n📅 Дата: 26 октября\n⏰ Время: 18:00\n📍 Место: Асман\n🪑 Ваше место: Стол ${bookingData.table}, Место ${bookingData.seat}\n💵 Цена: 5500 Сом\n🆔 ID билета: ${ticketId}\n\nБилет во вложении. Покажите его при входе на мероприятие!`
+            message: `🎫 *Здравствуйте, ${bookingData.firstName}!*\n\n🎉 *Ваш золотой билет на GOLDENMIDDLE готов!*\n\n📅 *Дата:* 26 октября 2025\n⏰ *Время:* 18:00\n📍 *Место:* Асман\n🪑 *Ваше место:* Стол ${bookingData.table}, Место ${bookingData.seat}\n💵 *Цена:* 5500 Сом\n🆔 *ID билета:* ${ticketId}\n\n📎 *Билет во вложении.* Покажите его при входе на мероприятие!\n\n🎊 *Добро пожаловать на GOLDENMIDDLE!*`
         };
 
-        console.log('📤 Отправляем текстовое сообщение...');
+        console.log(`📤 [${attemptId}] Отправляем текстовое сообщение...`);
         const messageResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendMessage/${GREEN_API_TOKEN}`,
-            messageData
+            messageData,
+            {
+                timeout: 30000, // 30 second timeout
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
         );
 
+        console.log(`📊 [${attemptId}] Message API Response:`, {
+            status: messageResponse.status,
+            data: messageResponse.data
+        });
+
         if (!messageResponse.data.idMessage) {
-            throw new Error('Failed to send WhatsApp message - no message ID returned');
+            throw new Error(`Failed to send WhatsApp message - no message ID returned. Response: ${JSON.stringify(messageResponse.data)}`);
         }
 
-        console.log('✅ WhatsApp сообщение отправлено успешно, ID:', messageResponse.data.idMessage);
+        console.log(`✅ [${attemptId}] WhatsApp сообщение отправлено успешно, ID: ${messageResponse.data.idMessage}`);
 
-        // Send the PDF file using undici's FormData
-        console.log('📄 Подготавливаем PDF файл для отправки...');
-        console.log(`📊 Размер PDF: ${pdfBytes.length} байт`);
+        // Send the PDF file with improved error handling
+        console.log(`📄 [${attemptId}] Подготавливаем PDF файл для отправки...`);
+        console.log(`📊 [${attemptId}] Размер PDF: ${pdfBytes.length} байт`);
         
         const formData = new FormData();
         formData.append('chatId', chatId);
         
         // Convert PDF buffer to Blob for undici FormData compatibility
         const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-        console.log(`📄 Blob создан: type=${pdfBlob.type}, size=${pdfBlob.size} байт`);
+        console.log(`📄 [${attemptId}] Blob создан: type=${pdfBlob.type}, size=${pdfBlob.size} байт`);
         
-        formData.append('file', pdfBlob, 'ticket.pdf');
-        console.log('✅ PDF файл добавлен в FormData');
+        formData.append('file', pdfBlob, `ticket_${ticketId}.pdf`);
+        console.log(`✅ [${attemptId}] PDF файл добавлен в FormData`);
 
-        console.log('📤 Отправляем PDF файл через WhatsApp API...');
+        console.log(`📤 [${attemptId}] Отправляем PDF файл через WhatsApp API...`);
         const fileResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendFileByUpload/${GREEN_API_TOKEN}`,
             formData,
             {
+                timeout: 60000, // 60 second timeout for file upload
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
             }
         );
 
+        console.log(`📊 [${attemptId}] File API Response:`, {
+            status: fileResponse.status,
+            data: fileResponse.data
+        });
+
         if (!fileResponse.data.idMessage) {
-            throw new Error('Failed to send WhatsApp file - no message ID returned');
+            throw new Error(`Failed to send WhatsApp file - no message ID returned. Response: ${JSON.stringify(fileResponse.data)}`);
         }
 
-        console.log('✅ WhatsApp билет отправлен успешно!');
-        console.log(`📱 Получатель: ${phone}`);
-        console.log(`🎫 ID билета: ${ticketId}`);
-        console.log(`📄 ID файла: ${fileResponse.data.idMessage}`);
+        const duration = Date.now() - startTime;
+        console.log(`✅ [${attemptId}] WhatsApp билет отправлен успешно! (${duration}ms)`);
+        console.log(`📱 [${attemptId}] Получатель: ${phone}`);
+        console.log(`🎫 [${attemptId}] ID билета: ${ticketId}`);
+        console.log(`📄 [${attemptId}] ID файла: ${fileResponse.data.idMessage}`);
         
-        return true;
+        // Log successful sending for audit
+        console.log(`📋 [${attemptId}] AUDIT: WhatsApp ticket sent successfully`, {
+            phone: phone,
+            ticketId: ticketId,
+            bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
+            messageId: messageResponse.data.idMessage,
+            fileId: fileResponse.data.idMessage,
+            duration: duration,
+            timestamp: new Date().toISOString()
+        });
+        
+        return {
+            success: true,
+            messageId: messageResponse.data.idMessage,
+            fileId: fileResponse.data.idMessage,
+            duration: duration
+        };
     } catch (error) {
-        console.error('❌ Ошибка при отправке WhatsApp билета:', error.message);
-        console.error('📄 Детали ошибки:', {
+        const duration = Date.now() - startTime;
+        console.error(`❌ [${attemptId}] Ошибка при отправке WhatsApp билета (${duration}ms):`, error.message);
+        console.error(`📄 [${attemptId}] Детали ошибки:`, {
             phone: phone,
             ticketId: ticketId,
             bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
             error: error.message,
-            stack: error.stack
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            responseData: error.response?.data,
+            duration: duration,
+            timestamp: new Date().toISOString()
         });
+        
+        // Log failed sending for audit
+        console.log(`📋 [${attemptId}] AUDIT: WhatsApp ticket sending failed`, {
+            phone: phone,
+            ticketId: ticketId,
+            bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
+            error: error.message,
+            status: error.response?.status,
+            duration: duration,
+            timestamp: new Date().toISOString()
+        });
+        
         throw error;
     }
 }
@@ -1040,35 +1103,99 @@ app.post('/api/confirm-payment', async (req, res) => {
             });
         }
 
-        // Send WhatsApp ticket with retry logic (don't fail payment confirmation if WhatsApp fails)
-        let whatsappSuccess = false;
+        // Send WhatsApp ticket with enhanced retry logic and comprehensive logging
+        let whatsappResult = {
+            success: false,
+            attempts: 0,
+            lastError: null,
+            messageId: null,
+            fileId: null,
+            totalDuration: 0
+        };
         const maxRetries = 3;
+        const retryDelay = 2000; // 2 seconds
+        
+        console.log(`📱 Starting WhatsApp ticket delivery for booking ${bookingId} (${booking.phone})`);
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            whatsappResult.attempts = attempt;
+            const attemptStartTime = Date.now();
+            
             try {
-                console.log(`📱 Попытка отправки WhatsApp билета ${attempt}/${maxRetries}...`);
-                await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
+                console.log(`📱 Attempt ${attempt}/${maxRetries} - Sending WhatsApp ticket to ${booking.phone}...`);
+                
+                const result = await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
                     firstName: booking.studentName.split(' ')[0],
                     lastName: booking.studentName.split(' ').slice(1).join(' '),
                     table: booking.tableNumber,
                     seat: booking.seatNumber
                 });
-                console.log('✅ WhatsApp ticket sent successfully');
-                whatsappSuccess = true;
+                
+                whatsappResult.success = true;
+                whatsappResult.messageId = result.messageId;
+                whatsappResult.fileId = result.fileId;
+                whatsappResult.totalDuration = Date.now() - attemptStartTime;
+                
+                console.log(`✅ WhatsApp ticket sent successfully on attempt ${attempt}!`);
+                console.log(`📊 WhatsApp delivery stats:`, {
+                    attempt: attempt,
+                    messageId: result.messageId,
+                    fileId: result.fileId,
+                    duration: result.duration,
+                    phone: booking.phone,
+                    ticketId: ticketId
+                });
                 break;
+                
             } catch (whatsappError) {
-                console.error(`❌ WhatsApp sending attempt ${attempt} failed:`, whatsappError.message);
+                const attemptDuration = Date.now() - attemptStartTime;
+                whatsappResult.lastError = whatsappError.message;
+                whatsappResult.totalDuration += attemptDuration;
+                
+                console.error(`❌ WhatsApp attempt ${attempt} failed (${attemptDuration}ms):`, whatsappError.message);
+                console.error(`📊 Attempt ${attempt} error details:`, {
+                    error: whatsappError.message,
+                    status: whatsappError.response?.status,
+                    statusText: whatsappError.response?.statusText,
+                    phone: booking.phone,
+                    ticketId: ticketId,
+                    duration: attemptDuration
+                });
+                
                 if (attempt < maxRetries) {
-                    console.log(`⏳ Retrying in 2 seconds... (attempt ${attempt + 1}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    console.log(`⏳ Waiting ${retryDelay}ms before retry ${attempt + 1}/${maxRetries}...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
                 } else {
-                    console.error('❌ All WhatsApp sending attempts failed, but payment confirmed');
+                    console.error(`❌ All ${maxRetries} WhatsApp attempts failed for booking ${bookingId}`);
+                    console.error(`📊 Final WhatsApp failure summary:`, {
+                        phone: booking.phone,
+                        ticketId: ticketId,
+                        attempts: maxRetries,
+                        totalDuration: whatsappResult.totalDuration,
+                        lastError: whatsappResult.lastError
+                    });
                 }
             }
         }
         
-        if (!whatsappSuccess) {
-            console.warn('⚠️ WhatsApp ticket could not be sent after all retry attempts');
+        // Log final WhatsApp delivery status
+        if (whatsappResult.success) {
+            console.log(`🎉 WhatsApp ticket delivery SUCCESSFUL for booking ${bookingId}`, {
+                phone: booking.phone,
+                ticketId: ticketId,
+                attempts: whatsappResult.attempts,
+                messageId: whatsappResult.messageId,
+                fileId: whatsappResult.fileId,
+                totalDuration: whatsappResult.totalDuration
+            });
+        } else {
+            console.warn(`⚠️ WhatsApp ticket delivery FAILED for booking ${bookingId}`, {
+                phone: booking.phone,
+                ticketId: ticketId,
+                attempts: whatsappResult.attempts,
+                totalDuration: whatsappResult.totalDuration,
+                lastError: whatsappResult.lastError
+            });
         }
         
         // Emit payment confirmed event to all admins
@@ -1104,9 +1231,19 @@ app.post('/api/confirm-payment', async (req, res) => {
         
         res.json({
             success: true,
-            message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+            message: whatsappResult.success 
+                ? 'Оплата подтверждена и билет отправлен в WhatsApp' 
+                : 'Оплата подтверждена, но не удалось отправить билет в WhatsApp',
             ticketId: ticketId,
-            ticketPath: `/tickets/${ticketFileName}`
+            ticketPath: `/tickets/${ticketFileName}`,
+            whatsappDelivery: {
+                success: whatsappResult.success,
+                attempts: whatsappResult.attempts,
+                messageId: whatsappResult.messageId,
+                fileId: whatsappResult.fileId,
+                duration: whatsappResult.totalDuration,
+                lastError: whatsappResult.lastError
+            }
         });
         
     } catch (error) {

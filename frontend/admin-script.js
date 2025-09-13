@@ -758,8 +758,30 @@ class AdminPanel {
                     this.updateStatistics();
                     this.generateHallPreview();
                     
-                    // Show success message
-                    alert(`✅ Оплата подтверждена для ${booking.firstName} ${booking.lastName}!\n\n📱 Билет отправлен в WhatsApp: ${booking.phone}\n🎫 ID билета: ${result.ticketId}\n\nМесто Стол ${booking.table}, Место ${booking.seat} теперь забронировано.`);
+                    // Show enhanced success message with WhatsApp delivery status
+                    let successMessage = `✅ Оплата подтверждена для ${booking.firstName} ${booking.lastName}!\n\n`;
+                    successMessage += `🎫 ID билета: ${result.ticketId}\n`;
+                    successMessage += `📱 WhatsApp: ${booking.phone}\n\n`;
+                    
+                    if (result.whatsappDelivery && result.whatsappDelivery.success) {
+                        successMessage += `✅ Билет успешно отправлен в WhatsApp!\n`;
+                        successMessage += `📊 Попыток: ${result.whatsappDelivery.attempts}\n`;
+                        successMessage += `⏱️ Время отправки: ${result.whatsappDelivery.duration}ms\n`;
+                        if (result.whatsappDelivery.messageId) {
+                            successMessage += `📨 ID сообщения: ${result.whatsappDelivery.messageId}\n`;
+                        }
+                    } else {
+                        successMessage += `⚠️ Билет НЕ удалось отправить в WhatsApp!\n`;
+                        if (result.whatsappDelivery) {
+                            successMessage += `📊 Попыток: ${result.whatsappDelivery.attempts}\n`;
+                            successMessage += `❌ Последняя ошибка: ${result.whatsappDelivery.lastError}\n`;
+                        }
+                        successMessage += `\n💡 Билет сохранен локально, но студент не получит его автоматически.`;
+                    }
+                    
+                    successMessage += `\n\nМесто Стол ${booking.table}, Место ${booking.seat} теперь забронировано.`;
+                    
+                    alert(successMessage);
                 } else {
                     throw new Error(result.error || 'Ошибка при подтверждении оплаты');
                 }
