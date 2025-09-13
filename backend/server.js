@@ -65,8 +65,7 @@ const secureTicketSystem = new SecureTicketSystem(
 );
 
 // Initialize WhatsApp fallback system
-const { WhatsAppFallbackSystem } = require('./whatsapp-fallback');
-const whatsappFallback = new WhatsAppFallbackSystem();
+const { handleFailedDelivery } = require('./whatsapp-fallback');
 
 // Function to emit seat updates to all connected clients
 async function emitSeatUpdate() {
@@ -1115,7 +1114,9 @@ app.post('/api/confirm-payment', async (req, res) => {
             lastError: null,
             messageId: null,
             fileId: null,
-            totalDuration: 0
+            totalDuration: 0,
+            quotaExceeded: false,
+            whitelistRestricted: false
         };
         const maxRetries = 3;
         const retryDelay = 2000; // 2 seconds
@@ -1157,19 +1158,41 @@ app.post('/api/confirm-payment', async (req, res) => {
                 whatsappResult.lastError = whatsappError.message;
                 whatsappResult.totalDuration += attemptDuration;
                 
-                console.error(`❌ WhatsApp attempt ${attempt} failed (${attemptDuration}ms):`, whatsappError.message);
-                console.error(`📊 Attempt ${attempt} error details:`, {
-                    error: whatsappError.message,
-                    status: whatsappError.response?.status,
-                    statusText: whatsappError.response?.statusText,
-                    phone: booking.phone,
-                    ticketId: ticketId,
-                    duration: attemptDuration
-                });
+                // Analyze error type for better handling
+                const status = whatsappError.response?.status;
+                const responseData = whatsappError.response?.data;
                 
-                if (attempt < maxRetries) {
+                if (status === 466) {
+                    whatsappResult.quotaExceeded = true;
+                    whatsappResult.whitelistRestricted = true;
+                    console.error(`❌ WhatsApp attempt ${attempt} failed - QUOTA EXCEEDED/WHITELIST RESTRICTED (${attemptDuration}ms)`);
+                    console.error(`📊 Quota/Whitelist Error Details:`, {
+                        phone: booking.phone,
+                        status: status,
+                        responseData: responseData,
+                        duration: attemptDuration
+                    });
+                    
+                    // Don't retry for quota/whitelist issues - they won't succeed
+                    console.log(`🛑 Stopping retries - quota exceeded or number not whitelisted`);
+                    break;
+                } else {
+                    console.error(`❌ WhatsApp attempt ${attempt} failed (${attemptDuration}ms):`, whatsappError.message);
+                    console.error(`📊 Attempt ${attempt} error details:`, {
+                        error: whatsappError.message,
+                        status: status,
+                        statusText: whatsappError.response?.statusText,
+                        phone: booking.phone,
+                        ticketId: ticketId,
+                        duration: attemptDuration
+                    });
+                }
+                
+                if (attempt < maxRetries && !whatsappResult.quotaExceeded) {
                     console.log(`⏳ Waiting ${retryDelay}ms before retry ${attempt + 1}/${maxRetries}...`);
                     await new Promise(resolve => setTimeout(resolve, retryDelay));
+                } else if (whatsappResult.quotaExceeded) {
+                    console.error(`❌ WhatsApp delivery stopped due to quota/whitelist restrictions for booking ${bookingId}`);
                 } else {
                     console.error(`❌ All ${maxRetries} WhatsApp attempts failed for booking ${bookingId}`);
                     console.error(`📊 Final WhatsApp failure summary:`, {
@@ -1205,7 +1228,12 @@ app.post('/api/confirm-payment', async (req, res) => {
             // Try fallback system for failed WhatsApp delivery
             try {
                 console.log(`🔄 Attempting fallback delivery for booking ${bookingId}...`);
-                await whatsappFallback.handleFailedDelivery(booking, ticketPath, whatsappResult.lastError);
+                await handleFailedDelivery(booking.phone, pdfBuffer, ticketId, {
+                    firstName: booking.studentName.split(' ')[0],
+                    lastName: booking.studentName.split(' ').slice(1).join(' '),
+                    table: booking.tableNumber,
+                    seat: booking.seatNumber
+                });
                 console.log(`✅ Fallback delivery initiated for booking ${bookingId}`);
             } catch (fallbackError) {
                 console.error(`❌ Fallback system also failed for booking ${bookingId}:`, fallbackError);
@@ -1243,11 +1271,19 @@ app.post('/api/confirm-payment', async (req, res) => {
         // Emit seat update to all connected clients
         await emitSeatUpdate();
         
+        // Generate appropriate response message based on the issue
+        let responseMessage;
+        if (whatsappResult.success) {
+            responseMessage = 'Оплата подтверждена и билет отправлен в WhatsApp';
+        } else if (whatsappResult.quotaExceeded) {
+            responseMessage = 'Оплата подтверждена. Билет сохранен локально. WhatsApp недоступен (превышена квота). Обратитесь к администратору.';
+        } else {
+            responseMessage = 'Оплата подтверждена, но не удалось отправить билет в WhatsApp. Билет сохранен локально.';
+        }
+
         res.json({
             success: true,
-            message: whatsappResult.success 
-                ? 'Оплата подтверждена и билет отправлен в WhatsApp' 
-                : 'Оплата подтверждена, но не удалось отправить билет в WhatsApp',
+            message: responseMessage,
             ticketId: ticketId,
             ticketPath: `/tickets/${ticketFileName}`,
             whatsappDelivery: {
@@ -1256,7 +1292,9 @@ app.post('/api/confirm-payment', async (req, res) => {
                 messageId: whatsappResult.messageId,
                 fileId: whatsappResult.fileId,
                 duration: whatsappResult.totalDuration,
-                lastError: whatsappResult.lastError
+                lastError: whatsappResult.lastError,
+                quotaExceeded: whatsappResult.quotaExceeded,
+                whitelistRestricted: whatsappResult.whitelistRestricted
             }
         });
         
