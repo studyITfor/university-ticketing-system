@@ -47,19 +47,7 @@ git push -u origin main
 2. Click "Sign Up" or "Login"
 3. Sign up with your GitHub account
 
-<<<<<<< HEAD
-### 2.2 Set Up Database (PostgreSQL)
-
-1. In your Railway project, click "New"
-2. Select "Database" → "PostgreSQL"
-3. Wait for the database to be created
-4. Note the `DATABASE_URL` from the database service
-5. Copy the `DATABASE_URL` for later use
-
-### 2.3 Create New Project
-=======
 ### 2.2 Create New Project
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 1. Click "New Project"
 2. Select "Deploy from GitHub repo"
@@ -156,39 +144,7 @@ railway status
 railway variables
 ```
 
-<<<<<<< HEAD
-## 🗄️ Step 6: Set Up Centralized Booking System
-
-### 6.1 Run Database Migrations
-
-1. Go to your Railway project dashboard
-2. Click on your service
-3. Go to "Deployments" tab
-4. Click on the latest deployment
-5. Click "View Logs"
-6. Run the migration command:
-
-```bash
-# In Railway console or via CLI
-railway run node scripts/migrate-to-centralized.js migrate
-```
-
-### 6.2 Verify Database Connection
-
-1. Check that the `DATABASE_URL` environment variable is set
-2. Verify the database connection in the logs
-3. Confirm the bookings table was created
-
-### 6.3 Test Centralized API
-
-1. Use the Postman collection to test the new endpoints
-2. Verify bookings are stored in the database
-3. Check that real-time updates work with the centralized system
-
-## 📊 Step 7: Monitoring
-=======
 ## 📊 Step 6: Monitoring
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ### 6.1 Railway Dashboard
 
@@ -241,22 +197,6 @@ If you encounter issues:
 
 - [ ] Git repository created and pushed to GitHub
 - [ ] Railway project created and connected to GitHub
-<<<<<<< HEAD
-- [ ] PostgreSQL database service created
-- [ ] Environment variables set (`NODE_ENV=production`, `PORT=3000`, `DATABASE_URL`)
-- [ ] Application deployed successfully
-- [ ] Database migrations run successfully
-- [ ] Domain generated and accessible
-- [ ] Centralized API endpoints responding correctly
-- [ ] Legacy API endpoints working (backward compatibility)
-- [ ] WebSocket connections working
-- [ ] Real-time updates functioning
-- [ ] Admin panel shows centralized data
-- [ ] Student interface works with fallback
-- [ ] Database persistence verified
-- [ ] Postman collection tested successfully
-- [ ] Concurrency testing completed
-=======
 - [ ] Environment variables set (`NODE_ENV=production`, `PORT=3000`)
 - [ ] Application deployed successfully
 - [ ] Domain generated and accessible
@@ -266,7 +206,6 @@ If you encounter issues:
 - [ ] Admin panel accessible
 - [ ] Student interface accessible
 - [ ] Postman collection tested successfully
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ---
 

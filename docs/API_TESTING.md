@@ -60,26 +60,6 @@ bookingId: (will be set automatically after creating a booking)
    - Response contains array of seat objects with statuses
    - Each seat has: `id`, `status`, `table`, `seat`
 
-<<<<<<< HEAD
-## 📝 Step 4: Test Centralized Booking Management
-
-### 4.1 Create New Booking (Centralized)
-
-1. Select "Booking Management (Centralized)" → "Create New Booking (Centralized)"
-2. Review the request body (modify if needed):
-   ```json
-   {
-     "firstName": "John",
-     "lastName": "Doe",
-     "email": "john@university.edu",
-     "phone": "+1234567890",
-     "seatId": "1-1",
-     "table": 1,
-     "seat": 1,
-     "price": 5900,
-     "status": "pending",
-     "bookingDate": "2024-01-15T10:30:00.000Z"
-=======
 ## 📝 Step 4: Test Booking Management
 
 ### 4.1 Create New Booking
@@ -95,7 +75,6 @@ bookingId: (will be set automatically after creating a booking)
      "ticketCount": 2,
      "selectedSeats": ["1-1", "1-2"],
      "totalPrice": 118
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
    }
    ```
 3. Click "Send"
@@ -104,135 +83,15 @@ bookingId: (will be set automatically after creating a booking)
    - Response contains `bookingId`
    - Note the `bookingId` for next tests
 
-<<<<<<< HEAD
-### 4.2 Get All Bookings
-
-1. Select "Booking Management (Centralized)" → "Get All Bookings"
-2. Click "Send"
-3. **Expected Result:**
-   - Status: 200 OK
-   - Response contains array of all bookings
-   - Each booking has centralized format with `userInfo` and `metadata`
-
-### 4.3 Get Bookings by Status
-
-1. Select "Booking Management (Centralized)" → "Get Bookings by Status"
-2. Modify the `status` query parameter if needed (pending, confirmed, cancelled)
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK
-   - Response contains filtered bookings
-
-### 4.4 Get Single Booking
-
-1. Select "Booking Management (Centralized)" → "Get Single Booking"
-2. Ensure `bookingId` variable is set from step 4.1
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK
-   - Response contains single booking details
-
-### 4.5 Confirm Booking
-
-1. Select "Booking Management (Centralized)" → "Confirm Booking"
-2. Ensure `bookingId` variable is set
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK
-   - Response confirms booking was confirmed
-   - Booking status changes to "confirmed"
-
-### 4.6 Update Booking
-
-1. Select "Booking Management (Centralized)" → "Update Booking"
-2. Ensure `bookingId` variable is set
-3. Modify the request body if needed
-4. Click "Send"
-5. **Expected Result:**
-   - Status: 200 OK
-   - Response confirms booking was updated
-
-### 4.7 Delete Booking
-
-1. Select "Booking Management (Centralized)" → "Delete Booking"
-2. Ensure `bookingId` variable is set
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK
-   - Response confirms booking was deleted
-
-### 4.8 Sync Local Bookings
-
-1. Select "Booking Management (Centralized)" → "Sync Local Bookings"
-2. Review the request body (contains local bookings with `pendingSync: true`)
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK
-   - Response confirms local bookings were synced
-
-## 📝 Step 5: Test Legacy Booking Management (Backward Compatibility)
-
-### 5.1 Create New Booking (Legacy)
-
-1. Select "Legacy Booking Management" → "Create New Booking (Legacy)"
-2. Click "Send"
-3. **Expected Result:**
-   - Status: 201 Created (redirects to centralized API)
-   - Response contains `bookingId`
-
-### 5.2 Confirm Payment (Legacy)
-
-1. Select "Legacy Booking Management" → "Confirm Payment (Legacy)"
-2. Ensure `bookingId` variable is set
-=======
 ### 4.2 Confirm Payment
 
 1. Select "Booking Management" → "Confirm Payment"
 2. Update the `bookingId` variable with the ID from step 4.1
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 3. Click "Send"
 4. **Expected Result:**
    - Status: 200 OK
    - Response confirms payment was processed
 
-<<<<<<< HEAD
-### 5.3 Delete Booking (Legacy)
-
-1. Select "Legacy Booking Management" → "Delete Booking (Legacy)"
-2. Ensure `bookingId` variable is set
-3. Click "Send"
-4. **Expected Result:**
-   - Status: 200 OK (redirects to centralized API)
-   - Response confirms booking was deleted
-
-### 5.4 Get Bookings (Legacy JSON)
-
-1. Select "Legacy Booking Management" → "Get Bookings (Legacy JSON)"
-2. Click "Send"
-3. **Expected Result:**
-   - Status: 200 OK
-   - Response contains JSON file data (if available)
-
-## 📝 Step 6: Test Concurrency and Conflict Scenarios
-
-### 6.1 Test Duplicate Booking (409 Conflict)
-
-1. Select "Concurrency Testing" → "Test Duplicate Booking (409 Conflict)"
-2. Click "Send"
-3. **Expected Result:**
-   - Status: 409 Conflict
-   - Response indicates seat is already booked
-   - This tests the seat availability check
-
-### 6.2 Test Concurrent Bookings
-
-1. Select "Concurrency Testing" → "Test Concurrent Bookings"
-2. Run this request multiple times simultaneously
-3. **Expected Result:**
-   - Only one booking should succeed
-   - Others should return 409 Conflict
-   - This tests transaction handling
-=======
 ### 4.3 Delete Booking
 
 1. Select "Booking Management" → "Delete Booking"
@@ -241,7 +100,6 @@ bookingId: (will be set automatically after creating a booking)
 4. **Expected Result:**
    - Status: 200 OK
    - Response confirms booking was deleted
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 ## 👨‍💼 Step 5: Test Admin Functions
 

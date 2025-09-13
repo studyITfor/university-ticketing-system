@@ -468,11 +468,7 @@ class StudentTicketingSystem {
         }
 
         if (errors.length > 0) {
-<<<<<<< HEAD
             alert('Пожалуйста, проверьте данные:\n' + errors.join('\n'));
-=======
-            alert('Пожалуйста, исправьте следующие ошибки:\n' + errors.join('\n'));
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
             return false;
         }
 
@@ -556,13 +552,8 @@ class StudentTicketingSystem {
 
     async saveBooking(bookingData) {
         try {
-<<<<<<< HEAD
-            // Try to send booking to centralized server first
-            const response = await fetch('/api/book', {
-=======
             // Send booking to server
             const response = await fetch('/api/create-booking', {
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -576,18 +567,9 @@ class StudentTicketingSystem {
                 // Update local storage with server response
                 const bookings = this.getBookings();
                 bookingData.id = result.bookingId;
-<<<<<<< HEAD
-                bookingData.pendingSync = false; // Mark as synced
                 bookings[result.bookingId] = bookingData;
                 localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
                 
-                console.log('✅ Booking saved to centralized server:', result.bookingId);
-                
-=======
-                bookings[result.bookingId] = bookingData;
-                localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
-                
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 // Store booking ID for later use
                 this.currentBookingId = result.bookingId;
                 
@@ -596,28 +578,9 @@ class StudentTicketingSystem {
                 throw new Error(result.error || 'Failed to save booking');
             }
         } catch (error) {
-<<<<<<< HEAD
-            console.warn('⚠️ Failed to save to server, falling back to localStorage:', error.message);
-            
-            // Fallback to localStorage with pendingSync flag
-            const bookings = this.getBookings();
-            const bookingId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            bookingData.id = bookingId;
-            bookingData.pendingSync = true; // Mark as pending sync
-            bookings[bookingId] = bookingData;
-            localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
-            
-            this.currentBookingId = bookingId;
-            
-            console.log('📱 Booking saved locally with pendingSync flag:', bookingId);
-            
-            // Show warning to user
-            alert('⚠️ Бронирование сохранено локально. Данные будут синхронизированы с сервером при восстановлении соединения.');
-=======
             console.error('Error saving booking to server:', error);
             alert('Ошибка при сохранении бронирования: ' + error.message);
             throw error;
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         }
     }
 
@@ -1169,25 +1132,6 @@ class StudentTicketingSystem {
                 this.showTestNotification(data);
             });
             
-<<<<<<< HEAD
-            // Listen for booking events
-            this.socket.on('booking:created', (data) => {
-                console.log('📝 New booking created:', data);
-                this.handleBookingUpdate(data);
-            });
-            
-            this.socket.on('booking:updated', (data) => {
-                console.log('📝 Booking updated:', data);
-                this.handleBookingUpdate(data);
-            });
-            
-            this.socket.on('booking:deleted', (data) => {
-                console.log('📝 Booking deleted:', data);
-                this.handleBookingUpdate(data);
-            });
-            
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         } catch (error) {
             console.error('🚨 Error initializing Socket.IO:', error);
             // Fallback to polling if Socket.IO is not available
@@ -1195,29 +1139,6 @@ class StudentTicketingSystem {
         }
     }
 
-<<<<<<< HEAD
-    // Handle booking updates from server
-    handleBookingUpdate(data) {
-        console.log('📝 Processing booking update:', data);
-        
-        // Update local storage if needed
-        if (data.booking) {
-            const bookings = this.getBookings();
-            if (data.type === 'deleted') {
-                delete bookings[data.booking.id];
-            } else {
-                bookings[data.booking.id] = data.booking;
-            }
-            localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
-        }
-        
-        // Refresh seat display to show updated status
-        this.updateSeatDisplay();
-        this.updateStatistics();
-    }
-
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     // Request initial seat data from server
     async requestInitialSeatData() {
         try {

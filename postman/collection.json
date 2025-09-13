@@ -63,197 +63,10 @@
       ]
     },
     {
-<<<<<<< HEAD
-      "name": "Booking Management (Centralized)",
-      "item": [
-        {
-          "name": "Create New Booking (Centralized)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john@university.edu\",\n  \"phone\": \"+1234567890\",\n  \"seatId\": \"1-1\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"price\": 5900,\n  \"status\": \"pending\",\n  \"bookingDate\": \"2024-01-15T10:30:00.000Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/book",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "book"]
-            },
-            "description": "Create a new booking using the centralized API"
-          },
-          "response": []
-        },
-        {
-          "name": "Get All Bookings",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings"]
-            },
-            "description": "Get all bookings from centralized storage"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Bookings by Status",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings?status=pending",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings"],
-              "query": [
-                {
-                  "key": "status",
-                  "value": "pending",
-                  "description": "Filter by booking status (pending, confirmed, cancelled)"
-                }
-              ]
-            },
-            "description": "Get bookings filtered by status"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Single Booking",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings", "{{bookingId}}"]
-            },
-            "description": "Get a single booking by ID"
-          },
-          "response": []
-        },
-        {
-          "name": "Confirm Booking",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"confirmedBy\": \"admin\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}/confirm",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings", "{{bookingId}}", "confirm"]
-            },
-            "description": "Confirm a booking (admin action)"
-          },
-          "response": []
-        },
-        {
-          "name": "Update Booking",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"confirmed\",\n  \"metadata\": {\n    \"paymentDate\": \"2024-01-15T11:00:00.000Z\",\n    \"paymentConfirmedBy\": \"admin\"\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings", "{{bookingId}}"]
-            },
-            "description": "Update a booking"
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Booking",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings/{{bookingId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings", "{{bookingId}}"]
-            },
-            "description": "Delete a booking by ID"
-          },
-          "response": []
-        },
-        {
-          "name": "Sync Local Bookings",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"bookings\": {\n    \"local_123\": {\n      \"id\": \"local_123\",\n      \"firstName\": \"Jane\",\n      \"lastName\": \"Smith\",\n      \"email\": \"jane@university.edu\",\n      \"phone\": \"+1234567891\",\n      \"seatId\": \"2-1\",\n      \"table\": 2,\n      \"seat\": 1,\n      \"price\": 5900,\n      \"status\": \"pending\",\n      \"bookingDate\": \"2024-01-15T10:30:00.000Z\",\n      \"pendingSync\": true\n    }\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/sync-bookings",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "sync-bookings"]
-            },
-            "description": "Sync local bookings to centralized storage"
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Legacy Booking Management",
-      "item": [
-        {
-          "name": "Create New Booking (Legacy)",
-=======
       "name": "Booking Management",
       "item": [
         {
           "name": "Create New Booking",
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "POST",
             "header": [
@@ -276,20 +89,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "create-booking"]
             },
-<<<<<<< HEAD
-            "description": "Create a new booking using legacy API (redirects to centralized)"
-=======
             "description": "Create a new booking for selected seats"
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         },
         {
-<<<<<<< HEAD
-          "name": "Confirm Payment (Legacy)",
-=======
           "name": "Confirm Payment",
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "POST",
             "header": [
@@ -312,20 +117,12 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "confirm-payment"]
             },
-<<<<<<< HEAD
-            "description": "Confirm payment for a booking using legacy API"
-=======
             "description": "Confirm payment for a booking"
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         },
         {
-<<<<<<< HEAD
-          "name": "Delete Booking (Legacy)",
-=======
           "name": "Delete Booking",
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "request": {
             "method": "DELETE",
             "header": [],
@@ -334,25 +131,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "delete-booking", "{{bookingId}}"]
             },
-<<<<<<< HEAD
-            "description": "Delete a booking by ID using legacy API (redirects to centralized)"
-          },
-          "response": []
-        },
-        {
-          "name": "Get Bookings (Legacy JSON)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/bookings-legacy",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "bookings-legacy"]
-            },
-            "description": "Get bookings from legacy JSON file storage"
-=======
             "description": "Delete a booking by ID"
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           },
           "response": []
         }
@@ -448,70 +227,6 @@
       ]
     },
     {
-<<<<<<< HEAD
-      "name": "Concurrency Testing",
-      "item": [
-        {
-          "name": "Test Duplicate Booking (409 Conflict)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"email\": \"test@university.edu\",\n  \"phone\": \"+1234567890\",\n  \"seatId\": \"1-1\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"price\": 5900,\n  \"status\": \"pending\",\n  \"bookingDate\": \"2024-01-15T10:30:00.000Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/book",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "book"]
-            },
-            "description": "Test booking the same seat twice to trigger 409 conflict"
-          },
-          "response": []
-        },
-        {
-          "name": "Test Concurrent Bookings",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Concurrent\",\n  \"lastName\": \"User\",\n  \"email\": \"concurrent@university.edu\",\n  \"phone\": \"+1234567891\",\n  \"seatId\": \"{{concurrentSeatId}}\",\n  \"table\": 2,\n  \"seat\": 1,\n  \"price\": 5900,\n  \"status\": \"pending\",\n  \"bookingDate\": \"2024-01-15T10:30:00.000Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/book",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "book"]
-            },
-            "description": "Test concurrent booking attempts (run multiple times simultaneously)"
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
       "name": "WebSocket Testing",
       "item": [
         {
@@ -543,15 +258,6 @@
       "value": "BOOKING_ID_FROM_CREATE_RESPONSE",
       "disabled": false,
       "description": "Booking ID obtained from create booking response"
-<<<<<<< HEAD
-    },
-    {
-      "key": "concurrentSeatId",
-      "value": "2-1",
-      "disabled": false,
-      "description": "Seat ID for concurrent testing"
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     }
   ],
   "event": [
@@ -582,27 +288,12 @@
           "});",
           "",
           "// For booking creation, extract booking ID",
-<<<<<<< HEAD
-          "if ((pm.info.requestName === 'Create New Booking (Centralized)' || pm.info.requestName === 'Create New Booking (Legacy)') && pm.response.code === 201) {",
-=======
           "if (pm.info.requestName === 'Create New Booking' && pm.response.code === 201) {",
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "    const responseJson = pm.response.json();",
           "    if (responseJson.bookingId) {",
           "        pm.variables.set('bookingId', responseJson.bookingId);",
           "        console.log('Booking ID saved:', responseJson.bookingId);",
           "    }",
-<<<<<<< HEAD
-          "}",
-          "",
-          "// For 409 conflict testing",
-          "if (pm.response.code === 409) {",
-          "    console.log('✅ 409 Conflict detected - seat already booked (expected behavior)');",
-          "    pm.test('Conflict response is correct', function () {",
-          "        pm.expect(pm.response.code).to.equal(409);",
-          "    });",
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
           "}"
         ]
       }

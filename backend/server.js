@@ -12,7 +12,14 @@ const { Blob } = require('buffer');
 const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
-const BookingService = require('./lib/booking-service');
+const { 
+    sequelize, 
+    Booking, 
+    Seat, 
+    AdminSession, 
+    initializeDatabase, 
+    closeDatabase 
+} = require('./database');
 
 const app = express();
 const server = createServer(app);
@@ -35,12 +42,14 @@ const PORT = process.env.PORT || config.server.port || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('.'));
+
+// Serve frontend files
+app.use(express.static(path.join(__dirname, '../frontend')));
 // Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Ensure tickets directory exists
-const ticketsDir = path.join(__dirname, 'tickets');
+const ticketsDir = path.join(__dirname, '../tickets');
 fs.ensureDirSync(ticketsDir);
 
 // Green API configuration
@@ -51,23 +60,13 @@ const GREEN_API_TOKEN = config.whatsapp.token;
 // Initialize Secure Ticket System
 const secureTicketSystem = new SecureTicketSystem(
     config.tickets?.secretKey || 'default-secret-key-change-in-production',
-    path.join(__dirname, 'secure-tickets-database.json')
+    path.join(__dirname, '../secure-tickets-database.json')
 );
-
-<<<<<<< HEAD
-// Initialize Booking Service
-const bookingService = new BookingService();
 
 // Function to emit seat updates to all connected clients
 async function emitSeatUpdate() {
     try {
-        // Get current seat statuses from booking service
-        const seatStatuses = await bookingService.getSeatStatuses();
-=======
-// Function to emit seat updates to all connected clients
-function emitSeatUpdate() {
-    try {
-        // Get current seat statuses
+        // Get current seat statuses from database
         const seatStatuses = {};
         
         // Initialize all seats as available (active) - using correct table count
@@ -78,33 +77,33 @@ function emitSeatUpdate() {
             }
         }
         
-        // Load bookings and update seat statuses
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
+        // Load bookings from database
+        const bookings = await Booking.findAll({
+            where: { isActive: true },
+            include: [{
+                model: Seat,
+                as: 'Seats'
+            }]
+        });
         
         // Update seat statuses based on bookings
-        Object.values(bookings).forEach(booking => {
-            if (booking.table && booking.seat && booking.status) {
-                const seatId = `${booking.table}-${booking.seat}`;
+        bookings.forEach(booking => {
+            if (booking.tableNumber && booking.seatNumber && booking.paymentStatus) {
+                const seatId = `${booking.tableNumber}-${booking.seatNumber}`;
                 let status = 'active'; // default
                 
-                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
+                if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
                     status = 'reserved';
-                } else if (booking.status === 'pending') {
+                } else if (booking.paymentStatus === 'pending') {
                     status = 'pending';
-                } else if (booking.status === 'prebooked') {
+                } else if (booking.paymentStatus === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.paymentStatus})`);
             }
         });
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         
         // Count statuses for logging
         const statusCounts = Object.values(seatStatuses).reduce((acc, status) => {
@@ -566,7 +565,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         const page = pdfDoc.addPage([600, 400]); // Landscape orientation for ticket format
         
         // Load Roboto font for Cyrillic support
-        const robotoFontBytes = fs.readFileSync(path.join(__dirname, 'fonts', 'ofont.ru_Roboto.ttf'));
+        const robotoFontBytes = fs.readFileSync(path.join(__dirname, '../fonts', 'ofont.ru_Roboto.ttf'));
         const robotoFont = await pdfDoc.embedFont(robotoFontBytes);
         
         // Colors - Golden theme
@@ -849,23 +848,13 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
 // API Routes
 
 // Create new booking
-<<<<<<< HEAD
-app.post('/api/book', async (req, res) => {
-    try {
-        const bookingData = req.body;
-        
-=======
 app.post('/api/create-booking', async (req, res) => {
     try {
         const bookingData = req.body;
         
         // Generate unique booking ID
         const bookingId = 'BK' + Date.now().toString(36).toUpperCase();
-        bookingData.id = bookingId;
-        bookingData.status = 'pending';
-        bookingData.bookingDate = new Date().toISOString();
         
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         // Handle seatId format (e.g., "3-3" -> table: 3, seat: 3)
         if (bookingData.seatId && !bookingData.table) {
             const [table, seat] = bookingData.seatId.split('-');
@@ -881,38 +870,6 @@ app.post('/api/create-booking', async (req, res) => {
             bookingData.seat = parseInt(bookingData.seat);
         }
         
-<<<<<<< HEAD
-        // Create seatId if not provided
-        if (!bookingData.seatId && bookingData.table && bookingData.seat) {
-            bookingData.seatId = `${bookingData.table}-${bookingData.seat}`;
-        }
-        
-        console.log('✅ Booking data after parsing:', {
-            seatId: bookingData.seatId,
-            table: bookingData.table,
-            seat: bookingData.seat,
-            firstName: bookingData.firstName,
-            lastName: bookingData.lastName
-        });
-        
-        // Create booking using booking service
-        const result = await bookingService.createBooking(bookingData);
-        
-        // Emit booking created event to all clients
-        io.emit('booking:created', {
-            booking: result.booking,
-            timestamp: Date.now()
-        });
-        
-        // Emit seat update to all connected clients
-        await emitSeatUpdate();
-        
-        res.status(201).json({
-            success: true,
-            message: 'Booking created successfully',
-            bookingId: result.booking.id,
-            booking: result.booking
-=======
         // Validate required fields
         if (!bookingData.table || !bookingData.seat) {
             console.log('❌ Missing table or seat fields:', bookingData);
@@ -920,34 +877,47 @@ app.post('/api/create-booking', async (req, res) => {
         }
         
         console.log('✅ Booking data after parsing:', {
-            id: bookingData.id,
+            id: bookingId,
             seatId: bookingData.seatId,
             table: bookingData.table,
             seat: bookingData.seat,
-            status: bookingData.status
+            status: 'pending'
         });
         
-        // Load existing bookings
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
         // Check if seat is already booked (only check for confirmed bookings)
-        const existingBooking = Object.values(bookings).find(b => 
-            b.table == bookingData.table && b.seat == bookingData.seat && 
-            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'Оплачен' || b.status === 'prebooked')
-        );
+        const existingBooking = await Booking.findOne({
+            where: {
+                tableNumber: bookingData.table,
+                seatNumber: bookingData.seat,
+                isActive: true,
+                paymentStatus: ['paid', 'confirmed', 'Оплачен', 'prebooked']
+            }
+        });
         
         if (existingBooking) {
             return res.status(400).json({ error: 'Место уже забронировано' });
         }
         
-        // Save booking
-        bookings[bookingId] = bookingData;
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        // Create booking in database
+        const newBooking = await Booking.create({
+            ticketId: bookingId,
+            studentName: `${bookingData.firstName} ${bookingData.lastName}`,
+            studentId: bookingData.studentId || 'N/A',
+            email: bookingData.email,
+            phone: bookingData.phone,
+            tableNumber: bookingData.table,
+            seatNumber: bookingData.seat,
+            paymentStatus: 'pending',
+            bookingTime: new Date()
+        });
+        
+        // Create seat record
+        await Seat.create({
+            tableNumber: bookingData.table,
+            seatNumber: bookingData.seat,
+            isOccupied: true,
+            bookingId: newBooking.id
+        });
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -959,7 +929,7 @@ app.post('/api/create-booking', async (req, res) => {
                 bookingId: bookingId,
                 table: bookingData.table,
                 seat: bookingData.seat,
-                status: bookingData.status,
+                status: 'pending',
                 firstName: bookingData.firstName,
                 lastName: bookingData.lastName
             },
@@ -977,232 +947,17 @@ app.post('/api/create-booking', async (req, res) => {
         console.log(`📡 API booking created broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
-        emitSeatUpdate();
+        await emitSeatUpdate();
         
         res.json({
             success: true,
             message: 'Бронирование создано успешно',
             bookingId: bookingId
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         });
         
     } catch (error) {
         console.error('Error creating booking:', error);
-<<<<<<< HEAD
-        
-        if (error.message === 'Seat is already booked') {
-            return res.status(409).json({ 
-                success: false,
-                error: 'Seat is already booked',
-                message: 'This seat is already reserved or confirmed'
-            });
-        }
-        
-        if (error.message.includes('Validation failed')) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Validation failed',
-                message: error.message
-            });
-        }
-        
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error creating booking'
-        });
-    }
-});
-
-// Legacy endpoint for backward compatibility
-app.post('/api/create-booking', async (req, res) => {
-    // Redirect to new endpoint
-    req.url = '/api/book';
-    return app._router.handle(req, res);
-});
-
-// Get all bookings
-app.get('/api/bookings', async (req, res) => {
-    try {
-        const status = req.query.status;
-        const bookings = await bookingService.getAllBookings(status);
-        
-        res.json({
-            success: true,
-            bookings: bookings,
-            count: bookings.length
-        });
-        
-    } catch (error) {
-        console.error('Error getting bookings:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error loading bookings'
-        });
-    }
-});
-
-// Get single booking
-app.get('/api/bookings/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const booking = await bookingService.getBooking(id);
-        
-        if (!booking) {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                message: 'No booking found with the specified ID'
-            });
-        }
-        
-        res.json({
-            success: true,
-            booking: booking
-        });
-        
-    } catch (error) {
-        console.error('Error getting booking:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error loading booking'
-        });
-    }
-});
-
-// Confirm booking (admin action)
-app.post('/api/bookings/:id/confirm', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const confirmationData = req.body;
-        
-        const result = await bookingService.confirmBooking(id, confirmationData);
-        
-        // Emit booking updated event to all clients
-        io.emit('booking:updated', {
-            booking: result.booking,
-            timestamp: Date.now()
-        });
-        
-        // Emit seat update to all connected clients
-        await emitSeatUpdate();
-        
-        res.json({
-            success: true,
-            message: 'Booking confirmed successfully',
-            booking: result.booking
-        });
-        
-    } catch (error) {
-        console.error('Error confirming booking:', error);
-        
-        if (error.message === 'Booking not found') {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                message: 'No booking found with the specified ID'
-            });
-        }
-        
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error confirming booking'
-        });
-    }
-});
-
-// Update booking (PATCH)
-app.patch('/api/bookings/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updates = req.body;
-        
-        const updatedBooking = await bookingService.updateBooking(id, updates);
-        
-        if (!updatedBooking) {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                message: 'No booking found with the specified ID'
-            });
-        }
-        
-        // Emit booking updated event to all clients
-        io.emit('booking:updated', {
-            booking: updatedBooking,
-            timestamp: Date.now()
-        });
-        
-        // Emit seat update to all connected clients
-        await emitSeatUpdate();
-        
-        res.json({
-            success: true,
-            message: 'Booking updated successfully',
-            booking: updatedBooking
-        });
-        
-    } catch (error) {
-        console.error('Error updating booking:', error);
-        
-        if (error.message.includes('Validation failed')) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Validation failed',
-                message: error.message
-            });
-        }
-        
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error updating booking'
-        });
-    }
-});
-
-// Delete booking
-app.delete('/api/bookings/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const result = await bookingService.deleteBooking(id);
-        
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                message: 'No booking found with the specified ID'
-            });
-        }
-        
-        // Emit booking deleted event to all clients
-        io.emit('booking:deleted', {
-            bookingId: id,
-            timestamp: Date.now()
-        });
-        
-        // Emit seat update to all connected clients
-        await emitSeatUpdate();
-        
-        res.json({
-            success: true,
-            message: 'Booking deleted successfully'
-        });
-        
-    } catch (error) {
-        console.error('Error deleting booking:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Error deleting booking'
-        });
-=======
         res.status(500).json({ error: 'Ошибка при создании бронирования' });
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     }
 });
 
@@ -1211,64 +966,38 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { bookingId } = req.body;
         
-<<<<<<< HEAD
-        // Get booking from booking service
-        const booking = await bookingService.getBooking(bookingId);
-        if (!booking) {
-            return res.status(404).json({ 
-                success: false,
-                error: 'Booking not found',
-                message: 'Бронирование не найдено'
-            });
-        }
+        // Find booking in database
+        const booking = await Booking.findOne({
+            where: { ticketId: bookingId, isActive: true }
+        });
         
-        // Generate unique ticket ID
-        const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
-=======
-        // Load bookings from localStorage (in a real app, this would be a database)
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        const booking = bookings[bookingId];
         if (!booking) {
             return res.status(404).json({ error: 'Бронирование не найдено' });
         }
         
         // Update booking status
-        booking.status = 'Оплачен';
-        booking.paymentDate = new Date().toISOString();
-        booking.paymentConfirmedBy = 'admin';
+        await booking.update({
+            paymentStatus: 'Оплачен',
+            paymentDate: new Date(),
+            paymentConfirmedBy: 'admin'
+        });
         
         // Generate unique ticket ID
         const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
-        booking.ticketId = ticketId;
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
+        await booking.update({ ticketId: ticketId });
         
         // Generate QR code data
         const qrData = {
             ticketId: ticketId,
             bookingId: booking.id,
-<<<<<<< HEAD
-            seatId: booking.seatId,
-=======
-            seatId: `${booking.table}-${booking.seat}`,
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
+            seatId: `${booking.tableNumber}-${booking.seatNumber}`,
             event: 'GOLDENMIDDLE',
             organization: 'КГМА',
             date: '2025-10-26',
             time: '18:00',
             venue: 'Асман',
-<<<<<<< HEAD
-            name: `${booking.userInfo.firstName} ${booking.userInfo.lastName}`,
-            seat: `Стол ${booking.seatId.split('-')[0]}, Место ${booking.seatId.split('-')[1]}`,
-=======
-            name: `${booking.firstName} ${booking.lastName}`,
-            seat: `Стол ${booking.table}, Место ${booking.seat}`,
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
+            name: booking.studentName,
+            seat: `Стол ${booking.tableNumber}, Место ${booking.seatNumber}`,
             timestamp: Date.now()
         };
         
@@ -1276,19 +1005,13 @@ app.post('/api/confirm-payment', async (req, res) => {
         const qrCodeDataURL = await generateQRCode(qrData);
         
         // Generate PDF ticket
-<<<<<<< HEAD
         const pdfBuffer = await generatePDFTicket({
-            ...booking,
-            firstName: booking.userInfo.firstName,
-            lastName: booking.userInfo.lastName,
-            phone: booking.userInfo.phone,
-            email: booking.userInfo.email,
-            table: parseInt(booking.seatId.split('-')[0]),
-            seat: parseInt(booking.seatId.split('-')[1])
+            ...booking.toJSON(),
+            firstName: booking.studentName.split(' ')[0],
+            lastName: booking.studentName.split(' ').slice(1).join(' '),
+            table: booking.tableNumber,
+            seat: booking.seatNumber
         }, qrCodeDataURL);
-=======
-        const pdfBuffer = await generatePDFTicket(booking, qrCodeDataURL);
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         
         // Save PDF to tickets folder
         const ticketFileName = `${ticketId}.pdf`;
@@ -1296,41 +1019,12 @@ app.post('/api/confirm-payment', async (req, res) => {
         fs.writeFileSync(ticketPath, pdfBuffer);
         
         // Send WhatsApp ticket
-<<<<<<< HEAD
-        await sendWhatsAppTicket(booking.userInfo.phone, pdfBuffer, ticketId, {
-            ...booking,
-            firstName: booking.userInfo.firstName,
-            lastName: booking.userInfo.lastName,
-            table: parseInt(booking.seatId.split('-')[0]),
-            seat: parseInt(booking.seatId.split('-')[1])
+        await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
+            firstName: booking.studentName.split(' ')[0],
+            lastName: booking.studentName.split(' ').slice(1).join(' '),
+            table: booking.tableNumber,
+            seat: booking.seatNumber
         });
-        
-        // Update booking status to confirmed
-        const updatedBooking = await bookingService.updateBooking(bookingId, {
-            status: 'confirmed',
-            metadata: {
-                ...booking.metadata,
-                ticketId: ticketId,
-                paymentDate: new Date().toISOString(),
-                paymentConfirmedBy: 'admin',
-                ticketPath: `/tickets/${ticketFileName}`
-            }
-        });
-        
-        // Emit booking updated event to all clients
-        io.emit('booking:updated', {
-            booking: updatedBooking,
-            timestamp: Date.now()
-        });
-        
-        // Emit seat update to all connected clients
-        await emitSeatUpdate();
-=======
-        await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, booking);
-        
-        // Update bookings
-        bookings[bookingId] = booking;
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1340,18 +1034,18 @@ app.post('/api/confirm-payment', async (req, res) => {
             type: 'payment-confirmed',
             data: {
                 bookingId: bookingId,
-                table: booking.table,
-                seat: booking.seat,
-                status: booking.status,
-                firstName: booking.firstName,
-                lastName: booking.lastName,
+                table: booking.tableNumber,
+                seat: booking.seatNumber,
+                status: booking.paymentStatus,
+                firstName: booking.studentName.split(' ')[0],
+                lastName: booking.studentName.split(' ').slice(1).join(' '),
                 ticketId: ticketId
             },
             timestamp: Date.now()
         });
         
         // Emit individual seat status update
-        const seatId = `${booking.table}-${booking.seat}`;
+        const seatId = `${booking.tableNumber}-${booking.seatNumber}`;
         io.emit('update-seat-status', {
             seatId: seatId,
             status: 'booked',
@@ -1361,75 +1055,17 @@ app.post('/api/confirm-payment', async (req, res) => {
         console.log(`📡 Payment confirmed broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
-        emitSeatUpdate();
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
+        await emitSeatUpdate();
         
         res.json({
             success: true,
             message: 'Оплата подтверждена и билет отправлен в WhatsApp',
             ticketId: ticketId,
-<<<<<<< HEAD
-            ticketPath: `/tickets/${ticketFileName}`,
-            booking: updatedBooking
-=======
             ticketPath: `/tickets/${ticketFileName}`
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         });
         
     } catch (error) {
         console.error('Error confirming payment:', error);
-<<<<<<< HEAD
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Ошибка при подтверждении оплаты'
-        });
-    }
-});
-
-// Legacy delete booking endpoint for backward compatibility
-app.delete('/api/delete-booking/:bookingId', async (req, res) => {
-    // Redirect to new endpoint
-    req.url = `/api/bookings/${req.params.bookingId}`;
-    req.method = 'DELETE';
-    return app._router.handle(req, res);
-});
-
-// Sync bookings from localStorage (for migration)
-app.post('/api/sync-bookings', async (req, res) => {
-    try {
-        const { bookings } = req.body;
-        
-        if (!bookings || typeof bookings !== 'object') {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Invalid bookings data',
-                message: 'Неверный формат данных бронирований'
-            });
-        }
-        
-        const result = await bookingService.syncLocalBookings(bookings);
-        
-        res.json({
-            success: true,
-            message: result.message,
-            syncedCount: result.syncedCount,
-            errors: result.errors
-        });
-        
-    } catch (error) {
-        console.error('Error syncing bookings:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            message: 'Ошибка при синхронизации бронирований'
-        });
-    }
-});
-
-// Legacy get bookings endpoint for backward compatibility
-app.get('/api/bookings-legacy', (req, res) => {
-=======
         res.status(500).json({ error: 'Ошибка при подтверждении оплаты' });
     }
 });
@@ -1509,25 +1145,39 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 });
 
 // Get bookings
-app.get('/api/bookings', (req, res) => {
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
+app.get('/api/bookings', async (req, res) => {
     try {
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
+        const bookings = await Booking.findAll({
+            where: { isActive: true },
+            order: [['createdAt', 'DESC']]
+        });
         
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
+        // Convert to the format expected by the frontend
+        const formattedBookings = {};
+        bookings.forEach(booking => {
+            formattedBookings[booking.ticketId] = {
+                id: booking.ticketId,
+                firstName: booking.studentName.split(' ')[0],
+                lastName: booking.studentName.split(' ').slice(1).join(' '),
+                studentId: booking.studentId,
+                email: booking.email,
+                phone: booking.phone,
+                table: booking.tableNumber,
+                seat: booking.seatNumber,
+                status: booking.paymentStatus,
+                bookingDate: booking.bookingTime,
+                paymentDate: booking.paymentDate,
+                ticketId: booking.ticketId
+            };
+        });
         
-        res.json(bookings);
+        res.json(formattedBookings);
     } catch (error) {
         console.error('Error loading bookings:', error);
         res.status(500).json({ error: 'Ошибка при загрузке бронирований' });
     }
 });
 
-<<<<<<< HEAD
-=======
 // Sync bookings from localStorage (for existing bookings)
 app.post('/api/sync-bookings', async (req, res) => {
     try {
@@ -1568,7 +1218,6 @@ app.post('/api/sync-bookings', async (req, res) => {
         res.status(500).json({ error: 'Ошибка при синхронизации бронирований' });
     }
 });
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 
 // Serve ticket files
 app.get('/tickets/:filename', (req, res) => {
@@ -1727,11 +1376,6 @@ app.get('/api/secure-tickets/stats', (req, res) => {
 });
 
 // Get seat statuses for real-time updates
-<<<<<<< HEAD
-app.get('/api/seat-statuses', async (req, res) => {
-    try {
-        const seatStatuses = await bookingService.getSeatStatuses();
-=======
 app.get('/api/seat-statuses', (req, res) => {
     try {
         const seatStatuses = {};
@@ -1770,7 +1414,6 @@ app.get('/api/seat-statuses', (req, res) => {
                 console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
             }
         });
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
         
         console.log(`📊 Returning seat statuses: ${Object.keys(seatStatuses).length} seats`);
         console.log(`📊 Status distribution:`, Object.values(seatStatuses).reduce((acc, status) => {
@@ -1786,10 +1429,6 @@ app.get('/api/seat-statuses', (req, res) => {
     } catch (error) {
         console.error('Error getting seat statuses:', error);
         res.status(500).json({ 
-<<<<<<< HEAD
-            success: false,
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
             error: 'Failed to get seat statuses',
             details: error.message 
         });
@@ -1985,42 +1624,65 @@ app.get('/api/test/socket-info', (req, res) => {
 // Export for Vercel serverless functions
 module.exports = app;
 
-// Start server with error handling
-server.listen(PORT, '0.0.0.0', (err) => {
-        if (err) {
-            console.error('❌ Failed to start server:', err);
-            if (err.code === 'EADDRINUSE') {
-                console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
-                console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
-                console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
-            }
+// Initialize database and start server
+async function startServer() {
+    try {
+        // Initialize database
+        console.log('🔄 Initializing database...');
+        const dbInitialized = await initializeDatabase();
+        
+        if (!dbInitialized) {
+            console.error('❌ Failed to initialize database. Exiting...');
             process.exit(1);
         }
         
-        console.log('🚀 Server started successfully!');
-        console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
-        console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
-        console.log('📱 Admin panel: http://localhost:3000/admin.html');
-        console.log('🎓 Student portal: http://localhost:3000/index.html');
-        console.log('🧪 Test page: http://localhost:3000/socket-test.html');
-        console.log('');
-        console.log('🔐 API Endpoints:');
-        console.log('  POST /api/create-booking - Create new booking');
-        console.log('  POST /api/confirm-payment - Confirm payment');
-        console.log('  DELETE /api/delete-booking/:id - Delete booking');
-        console.log('  GET  /api/seat-statuses - Get seat statuses');
-        console.log('  POST /api/test/emit-seat-update - Test seat update');
-        console.log('  GET  /api/test/socket-info - Socket.IO info');
-        console.log('');
-        console.log('🔌 Socket.IO Events:');
-        console.log('  seatUpdate - Real-time seat status updates');
-        console.log('  connected - Connection confirmation');
-        console.log('  test - Test event');
-        console.log('  requestSeatData - Request current seat data');
-        console.log('  ping/pong - Connection health check');
-        console.log('');
-        console.log('🎯 Ready for real-time seat booking!');
-    });
+        console.log('✅ Database initialized successfully');
+        
+        // Start server
+        server.listen(PORT, '0.0.0.0', (err) => {
+            if (err) {
+                console.error('❌ Failed to start server:', err);
+                if (err.code === 'EADDRINUSE') {
+                    console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
+                    console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
+                    console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
+                }
+                process.exit(1);
+            }
+            
+            console.log('🚀 Server started successfully!');
+            console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
+            console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
+            console.log('📱 Admin panel: http://localhost:3000/admin.html');
+            console.log('🎓 Student portal: http://localhost:3000/index.html');
+            console.log('🧪 Test page: http://localhost:3000/socket-test.html');
+            console.log('');
+            console.log('🔐 API Endpoints:');
+            console.log('  POST /api/create-booking - Create new booking');
+            console.log('  POST /api/confirm-payment - Confirm payment');
+            console.log('  DELETE /api/delete-booking/:id - Delete booking');
+            console.log('  GET  /api/seat-statuses - Get seat statuses');
+            console.log('  POST /api/test/emit-seat-update - Test seat update');
+            console.log('  GET  /api/test/socket-info - Socket.IO info');
+            console.log('');
+            console.log('🔌 Socket.IO Events:');
+            console.log('  seatUpdate - Real-time seat status updates');
+            console.log('  connected - Connection confirmation');
+            console.log('  test - Test event');
+            console.log('  requestSeatData - Request current seat data');
+            console.log('  ping/pong - Connection health check');
+            console.log('');
+            console.log('🎯 Ready for real-time seat booking!');
+        });
+        
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Start the server
+startServer();
 
 // Handle server errors
 server.on('error', (err) => {
@@ -2033,10 +1695,6 @@ server.on('error', (err) => {
         console.error('  3. Kill the process: taskkill /PID <pid> /F (Windows)');
     }
 });
-<<<<<<< HEAD
-=======
-
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server gracefully...');
@@ -2045,7 +1703,4 @@ process.on('SIGINT', () => {
         process.exit(0);
     });
 });
-<<<<<<< HEAD
 
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a

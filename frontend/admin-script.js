@@ -587,92 +587,29 @@ class AdminPanel {
         document.getElementById('adminPassword').value = '';
     }
 
-<<<<<<< HEAD
     async loadBookings() {
         try {
-            // Try to load from server first
+            console.log('🔄 Loading bookings from server...');
             const response = await fetch('/api/bookings');
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    // Convert server format to local format for compatibility
-                    this.bookings = {};
-                    data.bookings.forEach(booking => {
-                        this.bookings[booking.id] = {
-                            id: booking.id,
-                            firstName: booking.userInfo.firstName,
-                            lastName: booking.userInfo.lastName,
-                            email: booking.userInfo.email,
-                            phone: booking.userInfo.phone,
-                            table: parseInt(booking.seatId.split('-')[0]),
-                            seat: parseInt(booking.seatId.split('-')[1]),
-                            seatId: booking.seatId,
-                            price: booking.metadata.price || 5900,
-                            status: booking.status,
-                            bookingDate: booking.createdAt,
-                            paymentDate: booking.metadata.paymentDate,
-                            paymentConfirmedBy: booking.metadata.paymentConfirmedBy,
-                            ticketId: booking.metadata.ticketId,
-                            metadata: booking.metadata
-                        };
-                    });
-                    console.log('✅ Loaded bookings from server:', data.bookings.length);
-                } else {
-                    throw new Error('Server returned error');
-                }
-            } else {
-                throw new Error('Server request failed');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+            this.bookings = await response.json();
+            console.log('✅ Bookings loaded from server:', Object.keys(this.bookings).length);
+            this.renderBookingsTable();
+            this.renderPrebookedTable();
+            this.updatePrebookedStats();
         } catch (error) {
-            console.warn('⚠️ Failed to load from server, falling back to localStorage:', error.message);
-            // Fallback to localStorage
+            console.error('❌ Error loading bookings from server:', error);
+            // Fallback to localStorage if server fails
             const saved = localStorage.getItem('zolotayaSeredinaBookings');
             this.bookings = saved ? JSON.parse(saved) : {};
-            
-            // Try to sync local bookings to server
-            try {
-                await this.syncLocalBookings();
-            } catch (syncError) {
-                console.warn('⚠️ Failed to sync local bookings:', syncError.message);
-            }
-        }
-        
-=======
-    loadBookings() {
-        const saved = localStorage.getItem('zolotayaSeredinaBookings');
-        this.bookings = saved ? JSON.parse(saved) : {};
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
-        this.renderBookingsTable();
-        this.renderPrebookedTable();
-        this.updatePrebookedStats();
-    }
-
-<<<<<<< HEAD
-    async syncLocalBookings() {
-        const localBookings = localStorage.getItem('zolotayaSeredinaBookings');
-        if (!localBookings) return;
-
-        try {
-            const response = await fetch('/api/sync-bookings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ bookings: JSON.parse(localBookings) })
-            });
-
-            const result = await response.json();
-            if (result.success && result.syncedCount > 0) {
-                console.log(`✅ Synced ${result.syncedCount} bookings to server`);
-            }
-        } catch (error) {
-            console.error('❌ Failed to sync local bookings:', error);
-            throw error;
+            this.renderBookingsTable();
+            this.renderPrebookedTable();
+            this.updatePrebookedStats();
         }
     }
 
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
     renderBookingsTable() {
         const tbody = document.getElementById('bookingsTableBody');
         tbody.innerHTML = '';
@@ -794,20 +731,12 @@ class AdminPanel {
                 }
 
                 // Call backend API
-<<<<<<< HEAD
-                const response = await fetch(`/api/bookings/${bookingId}/confirm`, {
-=======
                 const response = await fetch('/api/confirm-payment', {
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-<<<<<<< HEAD
-                    body: JSON.stringify({ confirmedBy: 'admin' })
-=======
                     body: JSON.stringify({ bookingId: bookingId })
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 });
 
                 const result = await response.json();
@@ -960,16 +889,8 @@ class AdminPanel {
                 }
 
                 // Call backend API
-<<<<<<< HEAD
-                const response = await fetch(`/api/bookings/${bookingId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-=======
                 const response = await fetch(`/api/delete-booking/${bookingId}`, {
                     method: 'DELETE'
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
                 });
 
                 const result = await response.json();
@@ -2215,25 +2136,6 @@ ID бронирования: ${bookingId}
                 this.handlePrebookResult(result);
             });
             
-<<<<<<< HEAD
-            // Listen for booking events
-            this.socket.on('booking:created', (data) => {
-                console.log('📝 New booking created:', data);
-                this.loadBookings(); // Reload all bookings
-            });
-            
-            this.socket.on('booking:updated', (data) => {
-                console.log('📝 Booking updated:', data);
-                this.loadBookings(); // Reload all bookings
-            });
-            
-            this.socket.on('booking:deleted', (data) => {
-                console.log('📝 Booking deleted:', data);
-                this.loadBookings(); // Reload all bookings
-            });
-            
-=======
->>>>>>> 74c9fcf316183f5cb92f50ddf6239ab0a7130e6a
             // Handle real-time seat status updates from other admins
             this.socket.on('update-seat-status', (data) => {
                 console.log('📡 Admin panel received seat status update from admins room:', data);
