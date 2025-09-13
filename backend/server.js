@@ -1679,6 +1679,16 @@ app.get('/api/test-health', (req, res) => {
     });
 });
 
+// Alternative health check endpoint
+app.get('/api/health-check', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "Health check endpoint working",
+        timestamp: new Date().toISOString(),
+        status: "healthy"
+    });
+});
+
 // Test endpoint to get Socket.IO connection info (Admin only)
 app.get('/api/test/socket-info', (req, res) => {
     try {
