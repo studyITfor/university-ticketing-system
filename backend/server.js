@@ -1570,6 +1570,14 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
 function isAdminRequest(req) {
     // Check for admin role in headers or query params
     const adminRole = req.headers['x-user-role'] || req.query.role;
+    
+    // Additional security: log admin access attempts
+    if (adminRole === 'admin') {
+        console.log('🔐 Admin access granted to:', req.ip, 'for', req.path);
+    } else {
+        console.log('🚫 Non-admin access denied to:', req.ip, 'for', req.path);
+    }
+    
     return adminRole === 'admin';
 }
 

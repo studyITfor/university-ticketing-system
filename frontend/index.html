@@ -148,7 +148,7 @@
                             <i class="fas fa-mobile-alt"></i>
                             <div>
                                 <strong>MBank</strong>
-                                <span>+996 709 224 140</span>
+                                <span>+996 772 110 310 Алина А.</span>
                             </div>
                         </div>
                         <div class="bank-item">
@@ -161,7 +161,7 @@
                     </div>
                     <p class="payment-note">
                         <i class="fas fa-info-circle"></i>
-                        После оплаты отправьте скриншот на WhatsApp +996 709 224 140 для подтверждения
+                        После оплаты отправьте скриншот на WhatsApp +996 772 110 310 Алина А. для подтверждения
                     </p>
                 </div>
             </div>
@@ -225,7 +225,7 @@
                                 <i class="fas fa-mobile-alt"></i>
                                 <div>
                                     <strong>MBank</strong>
-                                    <span>+996 709 224 140</span>
+                                    <span>+996 772 110 310 Алина А.</span>
                                 </div>
                             </div>
                             <div class="bank-item">
@@ -273,7 +273,7 @@
                     <h5>Инструкции по оплате:</h5>
                     <ol>
                         <li>Переведите <strong>5900 Сом</strong> на указанные реквизиты</li>
-                        <li>Отправьте скриншот оплаты на WhatsApp +996 709 224 140</li>
+                        <li>Отправьте скриншот оплаты на WhatsApp +996 772 110 310 Алина А.</li>
                         <li>После подтверждения администратором вы получите золотой билет в WhatsApp</li>
                     </ol>
                 </div>
@@ -304,25 +304,30 @@
         
         // Toggle test panel visibility (Admin only)
         function toggleTestPanel() {
-            // Check if user is admin
+            // Double-check if user is admin (security measure)
             if (!isAdmin()) {
+                console.warn('❌ Unauthorized access attempt to test panel');
                 alert('❌ Access denied. This feature is only available to administrators.');
                 return;
             }
             
             const panel = document.getElementById('testPanel');
+            if (!panel) {
+                console.error('❌ Test panel element not found');
+                return;
+            }
+            
             const isVisible = panel.style.display !== 'none';
             panel.style.display = isVisible ? 'none' : 'block';
+            
+            console.log('🔧 Test panel toggled:', isVisible ? 'hidden' : 'visible');
         }
         
-        // Check if user is admin (simple check based on URL or localStorage)
+        // Check if user is admin (secure check based on localStorage only)
         function isAdmin() {
-            // Check if we're on admin page
-            if (window.location.pathname.includes('admin')) {
-                return true;
-            }
-            // Check localStorage for admin flag
-            return localStorage.getItem('userRole') === 'admin';
+            // Only check localStorage for admin flag - URL path is not secure
+            const userRole = localStorage.getItem('userRole');
+            return userRole === 'admin';
         }
         
         // Initialize student system and make it globally accessible
@@ -334,6 +339,19 @@
                 const testToggleButton = document.getElementById('testToggleButton');
                 if (testToggleButton) {
                     testToggleButton.style.display = 'block';
+                }
+            } else {
+                // Ensure test panel is completely hidden for non-admin users
+                const testPanel = document.getElementById('testPanel');
+                const testToggleButton = document.getElementById('testToggleButton');
+                
+                if (testPanel) {
+                    testPanel.style.display = 'none';
+                    testPanel.style.visibility = 'hidden';
+                }
+                if (testToggleButton) {
+                    testToggleButton.style.display = 'none';
+                    testToggleButton.style.visibility = 'hidden';
                 }
             }
         });
