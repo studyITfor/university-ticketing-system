@@ -1679,6 +1679,132 @@ app.get('/api/test/socket-info', (req, res) => {
     }
 });
 
+// Force release paid booking (Admin only)
+app.post('/api/force-release-booking/:bookingId', async (req, res) => {
+    try {
+        // Check if request is from admin
+        if (!isAdminRequest(req)) {
+            return res.status(403).json({ 
+                success: false,
+                error: 'Access denied',
+                message: 'This endpoint is only available to administrators'
+            });
+        }
+
+        const { bookingId } = req.params;
+
+        // Find the booking in the database
+        const booking = await Booking.findOne({
+            where: { ticketId: bookingId, isActive: true },
+            include: [{
+                model: Seat,
+                as: 'Seats'
+            }]
+        });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                error: 'Booking not found',
+                message: 'Бронирование не найдено'
+            });
+        }
+
+        // Check if booking is actually paid
+        if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'confirmed' && booking.paymentStatus !== 'Оплачен') {
+            return res.status(400).json({
+                success: false,
+                error: 'Booking not paid',
+                message: 'Бронирование не оплачено. Можно освободить только оплаченные места.'
+            });
+        }
+
+        // Store booking data before release for event emission
+        const releasedBooking = {
+            id: booking.ticketId,
+            table: booking.tableNumber,
+            seat: booking.seatNumber,
+            firstName: booking.studentName.split(' ')[0],
+            lastName: booking.studentName.split(' ').slice(1).join(' '),
+            paymentStatus: booking.paymentStatus,
+            previousStatus: booking.paymentStatus
+        };
+
+        // Update booking status to released
+        await booking.update({ 
+            paymentStatus: 'released',
+            isActive: false,
+            releasedAt: new Date(),
+            releasedBy: 'admin'
+        });
+
+        // Update associated seats to available
+        await Seat.update(
+            { status: 'available' },
+            { where: { bookingId: booking.id } }
+        );
+
+        // Delete ticket file if exists
+        if (booking.ticketId) {
+            const ticketPath = path.join(ticketsDir, `${booking.ticketId}.pdf`);
+            if (fs.existsSync(ticketPath)) {
+                fs.unlinkSync(ticketPath);
+            }
+        }
+
+        // Emit booking released event to all admins
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+
+        io.to('admins').emit('update-seat-status', {
+            type: 'booking-force-released',
+            data: {
+                bookingId: bookingId,
+                table: releasedBooking.table,
+                seat: releasedBooking.seat,
+                status: 'available',
+                firstName: releasedBooking.firstName,
+                lastName: releasedBooking.lastName,
+                previousStatus: releasedBooking.previousStatus,
+                releasedBy: 'admin'
+            },
+            timestamp: Date.now()
+        });
+
+        // Emit individual seat status update
+        const seatId = `${releasedBooking.table}-${releasedBooking.seat}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'available',
+            timestamp: Date.now()
+        });
+
+        console.log(`📡 Booking force released broadcasted to ${adminCount} admin clients in admins room`);
+
+        // Emit seat update to all connected clients
+        emitSeatUpdate();
+
+        res.json({
+            success: true,
+            message: 'Место принудительно освобождено администратором',
+            data: {
+                bookingId: bookingId,
+                table: releasedBooking.table,
+                seat: releasedBooking.seat,
+                previousStatus: releasedBooking.previousStatus
+            }
+        });
+
+    } catch (error) {
+        console.error('Error force releasing booking:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Ошибка при принудительном освобождении места',
+            details: error.message 
+        });
+    }
+});
+
 // Export for Vercel serverless functions
 module.exports = app;
 

@@ -644,6 +644,11 @@ class AdminPanel {
                                 ${booking.status === 'paid' ? 'disabled title="Нельзя удалить оплаченное бронирование"' : ''}>
                             <i class="fas fa-trash"></i> ${booking.status === 'paid' ? 'Заблокировано' : 'Удалить'}
                         </button>
+                        ${booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен' ? `
+                            <button class="btn btn-warning" onclick="adminPanel.forceReleaseBooking('${booking.id}')" title="Принудительно освободить место (только для администраторов)">
+                                <i class="fas fa-unlock"></i> Освободить
+                            </button>
+                        ` : ''}
                     </div>
                 </td>
             `;
@@ -911,7 +916,7 @@ class AdminPanel {
                     // Store booking details for confirmation message
                     const seatInfo = `Стол ${booking.table}, Место ${booking.seat}`;
                     const customerName = `${booking.firstName} ${booking.lastName}`;
-                    
+
                     // Remove the booking from local data
                     delete this.bookings[bookingId];
                     this.saveBookings();
@@ -948,6 +953,91 @@ class AdminPanel {
                 if (deleteButton) {
                     deleteButton.disabled = false;
                     deleteButton.innerHTML = '<i class="fas fa-trash"></i> Удалить';
+                }
+            }
+        }
+    }
+
+    // Force release paid booking (Admin only)
+    async forceReleaseBooking(bookingId) {
+        if (!this.bookings[bookingId]) {
+            alert('❌ Бронирование не найдено в локальных данных');
+            return;
+        }
+        
+        const booking = this.bookings[bookingId];
+        
+        // Check if booking is actually paid
+        const isPaid = booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен';
+        if (!isPaid) {
+            alert('❌ Можно освободить только оплаченные бронирования!');
+            return;
+        }
+        
+        if (confirm(`⚠️ ПРИНУДИТЕЛЬНО ОСВОБОДИТЬ МЕСТО\n\nКлиент: ${booking.firstName} ${booking.lastName}\nМесто: Стол ${booking.table}, Место ${booking.seat}\nСтатус: ${booking.status || booking.paymentStatus}\n\n⚠️ ВНИМАНИЕ: Это действие:\n• Освободит место для нового бронирования\n• Удалит билет клиента\n• Нельзя будет отменить\n\nПродолжить?`)) {
+            try {
+                // Show loading state
+                const releaseButton = document.querySelector(`button[onclick="adminPanel.forceReleaseBooking('${bookingId}')"]`);
+                if (releaseButton) {
+                    releaseButton.disabled = true;
+                    releaseButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Освобождение...';
+                }
+
+                // Call backend API with admin role
+                const response = await fetch(`/api/force-release-booking/${bookingId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Role': 'admin'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Store booking details for confirmation message
+                    const seatInfo = `Стол ${booking.table}, Место ${booking.seat}`;
+                    const customerName = `${booking.firstName} ${booking.lastName}`;
+                    const previousStatus = result.data.previousStatus;
+
+                    // Remove the booking from local data
+                    delete this.bookings[bookingId];
+                    this.saveBookings();
+                    
+                    // Update UI
+                    this.renderBookingsTable();
+                    this.updateStatistics();
+                    this.generateHallPreview();
+                    
+                    // Show confirmation message
+                    alert(`✅ МЕСТО ПРИНУДИТЕЛЬНО ОСВОБОЖДЕНО!\n\nМесто ${seatInfo} освобождено администратором\nКлиент: ${customerName}\nПредыдущий статус: ${previousStatus}\n\nМесто теперь доступно для нового бронирования.`);
+                } else {
+                    // Handle specific error cases
+                    if (result.error === 'Booking not found') {
+                        alert('❌ Бронирование уже удалено или не найдено');
+                        // Remove from local data if it exists
+                        delete this.bookings[bookingId];
+                        this.saveBookings();
+                        this.renderBookingsTable();
+                        this.updateStatistics();
+                        this.generateHallPreview();
+                    } else if (result.error === 'Booking not paid') {
+                        alert('❌ Можно освободить только оплаченные бронирования!');
+                    } else if (result.error === 'Access denied') {
+                        alert('❌ Доступ запрещен! Только администраторы могут освобождать места.');
+                    } else {
+                        throw new Error(result.message || result.error || 'Ошибка при освобождении места');
+                    }
+                }
+            } catch (error) {
+                console.error('Error force releasing booking:', error);
+                alert(`❌ Ошибка при освобождении места: ${error.message}`);
+            } finally {
+                // Reset button state
+                const releaseButton = document.querySelector(`button[onclick="adminPanel.forceReleaseBooking('${bookingId}')"]`);
+                if (releaseButton) {
+                    releaseButton.disabled = false;
+                    releaseButton.innerHTML = '<i class="fas fa-unlock"></i> Освободить';
                 }
             }
         }
