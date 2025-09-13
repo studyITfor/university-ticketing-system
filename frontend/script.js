@@ -450,15 +450,15 @@ class StudentTicketingSystem {
         if (!data.lastName || !data.lastName?.trim()) errors.push('Фамилия обязательна');
         if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
 
-        // Phone validation - must start with +996
-        if (data.phone && !data.phone.startsWith('+996')) {
-            errors.push('Номер телефона должен начинаться с +996 (например: +996 777 123 456)');
+        // Phone validation - must start with + (international format)
+        if (data.phone && !data.phone.startsWith('+')) {
+            errors.push('Номер телефона должен начинаться с + (международный формат, например: +996 777 123 456)');
         }
         
-        // Additional phone format validation
-        const phoneRegex = /^\+996\s?\d{3}\s?\d{3}\s?\d{3}$/;
+        // Additional phone format validation - international format
+        const phoneRegex = /^\+\d{1,4}\s?\d{3,4}\s?\d{3,4}\s?\d{3,4}$/;
         if (data.phone && !phoneRegex.test(data.phone)) {
-            errors.push('Пожалуйста, введите корректный номер телефона в формате +996 XXX XXX XXX');
+            errors.push('Пожалуйста, введите корректный номер телефона в международном формате (например: +996 777 123 456)');
         }
 
         if (errors.length > 0) {

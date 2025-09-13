@@ -875,6 +875,19 @@ app.post('/api/create-booking', async (req, res) => {
             return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
         }
         
+        // Validate phone number format (must start with +)
+        if (!bookingData.phone || !bookingData.phone.startsWith('+')) {
+            console.log('❌ Invalid phone format:', bookingData.phone);
+            return res.status(400).json({ error: 'Номер телефона должен начинаться с + (международный формат)' });
+        }
+        
+        // Additional phone validation
+        const phoneRegex = /^\+\d{1,4}\s?\d{3,4}\s?\d{3,4}\s?\d{3,4}$/;
+        if (!phoneRegex.test(bookingData.phone)) {
+            console.log('❌ Invalid phone format:', bookingData.phone);
+            return res.status(400).json({ error: 'Пожалуйста, введите корректный номер телефона в международном формате' });
+        }
+        
         console.log('✅ Booking data after parsing:', {
             id: bookingId,
             seatId: bookingData.seatId,
@@ -1019,26 +1032,43 @@ app.post('/api/confirm-payment', async (req, res) => {
         
         // Validate phone number format before sending WhatsApp
         const phoneNumber = booking.phone;
-        if (!phoneNumber || !phoneNumber.startsWith('+996')) {
+        if (!phoneNumber || !phoneNumber.startsWith('+')) {
             console.warn(`⚠️ Invalid phone number format for booking ${bookingId}: ${phoneNumber}. Skipping WhatsApp send.`);
             return res.status(400).json({ 
                 error: 'Invalid phone number format',
-                message: 'Номер телефона должен начинаться с +996 для отправки билета в WhatsApp'
+                message: 'Номер телефона должен быть в международном формате (начинаться с +) для отправки билета в WhatsApp'
             });
         }
 
-        // Send WhatsApp ticket (don't fail payment confirmation if WhatsApp fails)
-        try {
-            await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
-                firstName: booking.studentName.split(' ')[0],
-                lastName: booking.studentName.split(' ').slice(1).join(' '),
-                table: booking.tableNumber,
-                seat: booking.seatNumber
-            });
-            console.log('✅ WhatsApp ticket sent successfully');
-        } catch (whatsappError) {
-            console.error('❌ WhatsApp sending failed, but payment confirmed:', whatsappError.message);
-            // Don't fail the payment confirmation if WhatsApp fails
+        // Send WhatsApp ticket with retry logic (don't fail payment confirmation if WhatsApp fails)
+        let whatsappSuccess = false;
+        const maxRetries = 3;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`📱 Попытка отправки WhatsApp билета ${attempt}/${maxRetries}...`);
+                await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
+                    firstName: booking.studentName.split(' ')[0],
+                    lastName: booking.studentName.split(' ').slice(1).join(' '),
+                    table: booking.tableNumber,
+                    seat: booking.seatNumber
+                });
+                console.log('✅ WhatsApp ticket sent successfully');
+                whatsappSuccess = true;
+                break;
+            } catch (whatsappError) {
+                console.error(`❌ WhatsApp sending attempt ${attempt} failed:`, whatsappError.message);
+                if (attempt < maxRetries) {
+                    console.log(`⏳ Retrying in 2 seconds... (attempt ${attempt + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                } else {
+                    console.error('❌ All WhatsApp sending attempts failed, but payment confirmed');
+                }
+            }
+        }
+        
+        if (!whatsappSuccess) {
+            console.warn('⚠️ WhatsApp ticket could not be sent after all retry attempts');
         }
         
         // Emit payment confirmed event to all admins
@@ -1091,11 +1121,9 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
         const userIp = req.ip || req.connection.remoteAddress;
-        const isAdmin = isAdminRequest(req);
-        const allowPaidDelete = config.deletion.allowPaidDeletion;
         
         console.log(`🔍 Attempting to delete booking with ID: ${bookingId}`);
-        console.log(`👤 User IP: ${userIp}, Admin: ${isAdmin}, AllowPaidDelete: ${allowPaidDelete}`);
+        console.log(`👤 User IP: ${userIp} - Deletion allowed for any user with admin panel access`);
         
         // Start transaction for atomic operations
         transaction = await sequelize.transaction();
@@ -1124,7 +1152,9 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         }
         
         if (!booking) {
-            await transaction.rollback();
+            if (transaction) {
+                await transaction.rollback();
+            }
             return res.status(404).json({ 
                 success: false,
                 error: 'Booking not found',
@@ -1164,7 +1194,7 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         };
         
         // Log deletion for audit trail (simplified for testing)
-        console.log(`📝 Deletion logged for booking ${booking.ticketId} by ${isAdmin ? 'admin' : 'user'} from ${userIp}`);
+        console.log(`📝 Deletion logged for booking ${booking.ticketId} by user from ${userIp}`);
         console.log(`📋 Booking backup data:`, JSON.stringify(bookingBackup, null, 2));
         
         // Store booking data for event emission
@@ -1207,9 +1237,9 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         try {
             // Emit real-time updates to all clients
             io.to('admins').emit('bookingDeleted', booking.ticketId);
-            io.emit('seatUpdate', await getSeatStatuses());
+            await emitSeatUpdate();
             
-            console.log(`✅ Booking ${booking.ticketId} deleted successfully by ${isAdmin ? 'admin' : 'user'}`);
+            console.log(`✅ Booking ${booking.ticketId} deleted successfully by user from ${userIp}`);
             
             res.status(200).json({ 
                 success: true, 
@@ -1237,10 +1267,14 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         }
         
     } catch (error) {
-        // Rollback transaction if it exists
-        if (transaction) {
-            await transaction.rollback();
-            console.log(`🔄 Transaction rolled back due to error: ${error.message}`);
+        // Rollback transaction if it exists and hasn't been committed
+        if (transaction && transaction.finished !== 'commit') {
+            try {
+                await transaction.rollback();
+                console.log(`🔄 Transaction rolled back due to error: ${error.message}`);
+            } catch (rollbackError) {
+                console.error('❌ Error during transaction rollback:', rollbackError.message);
+            }
         }
         
         console.error('❌ Error deleting booking:', error);
