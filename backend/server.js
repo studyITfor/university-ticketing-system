@@ -1441,15 +1441,22 @@ app.post('/api/resend-ticket', async (req, res) => {
         whatsappResult = await sendWhatsAppTicket(phone, ticket);
         
         if (whatsappResult.success) {
-          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1 WHERE id=$2', 
-            [whatsappResult.textMessageId || whatsappResult.fileMessageId, booking.id]);
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
+            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, booking.id]);
           console.log('✅ WhatsApp ticket resent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
-            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId
+            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+            ticketId: ticket?.ticketId
           });
         } else {
           console.error('❌ WhatsApp resend failed:', whatsappResult.error);
+          // Still update ticket_id even if WhatsApp fails
+          if (ticket?.ticketId) {
+            await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id=$2', 
+              [ticket.ticketId, booking.id]);
+            console.log('✅ Ticket ID saved despite WhatsApp resend failure');
+          }
         }
       } else {
         console.warn('⚠️ Invalid/missing phone for WhatsApp resend:', phone);
@@ -1563,11 +1570,12 @@ app.post('/api/confirm-payment', async (req, res) => {
     // generate ticket (PDF or text)
     let ticket = null;
     try {
+      console.log('🎫 Generating ticket for booking:', updatedBooking.id);
       const { generateTicketForBooking } = require('./ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
-      console.log('Ticket generated:', ticket);
+      console.log('✅ Ticket generated successfully:', ticket);
     } catch (e) {
-      console.error('Ticket generation error', e);
+      console.error('❌ Ticket generation error:', e);
     }
 
     // send whatsapp via Green API or simulation
@@ -1575,20 +1583,27 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
-        console.log('📱 Sending WhatsApp ticket to:', phone);
+        console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
         const { sendWhatsAppTicket } = require('./ticket-utils');
         whatsappResult = await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
         
         if (whatsappResult.success) {
-          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1 WHERE id=$2', 
-            [whatsappResult.textMessageId || whatsappResult.fileMessageId, updatedBooking.id]);
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
+            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, updatedBooking.id]);
           console.log('✅ WhatsApp sent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
-            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId
+            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+            ticketId: ticket?.ticketId
           });
         } else {
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
+          // Still update ticket_id even if WhatsApp fails
+          if (ticket?.ticketId) {
+            await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id=$2', 
+              [ticket.ticketId, updatedBooking.id]);
+            console.log('✅ Ticket ID saved despite WhatsApp failure');
+          }
         }
       } else {
         console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
