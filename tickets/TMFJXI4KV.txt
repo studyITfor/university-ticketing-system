@@ -1,0 +1,15 @@
+🎫 TICKET CONFIRMED 🎫
+
+Ticket ID: TMFJXI4KV
+Booking ID: BKMFJX305E
+Name: Playwright Test
+Phone: +996555123456
+Table: undefined
+Seat: undefined
+Date: Sun Sep 14 2025 16:36:09 GMT+0600 (Киргизия)
+Status: ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓
