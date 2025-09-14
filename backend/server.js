@@ -81,14 +81,35 @@ async function emitSeatUpdate() {
             }
         }
         
-        // Load bookings from database
-        const bookings = await Booking.findAll({
-            where: { isActive: true },
-            include: [{
-                model: Seat,
-                as: 'Seats'
-            }]
-        });
+        // Load bookings from database with timeout and fallback
+        let bookings = [];
+        try {
+            bookings = await Promise.race([
+                Booking.findAll({
+                    where: { isActive: true },
+                    include: [{
+                        model: Seat,
+                        as: 'Seats'
+                    }]
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Database query timeout')), 10000)
+                )
+            ]);
+        } catch (dbError) {
+            console.warn('⚠️ Database query failed, using fallback data:', dbError.message);
+            // Fallback to file-based data if database fails
+            const bookingsPath = path.join(__dirname, 'bookings.json');
+            if (fs.existsSync(bookingsPath)) {
+                const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+                bookings = Object.values(fileBookings).map(booking => ({
+                    tableNumber: booking.table,
+                    seatNumber: booking.seat,
+                    paymentStatus: booking.status,
+                    isActive: true
+                }));
+            }
+        }
         
         // Update seat statuses based on bookings
         bookings.forEach(booking => {
