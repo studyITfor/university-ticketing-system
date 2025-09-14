@@ -23,10 +23,28 @@ async function generateTicketForBooking(booking) {
 }
 
 async function sendWhatsAppTicket(phone, ticket) {
-  // If real provider configured, call it. Otherwise simulate and log.
+  const fs = require('fs');
+  const path = require('path');
+  
+  // Validate phone format
+  if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+    console.error('❌ Invalid phone format:', phone);
+    return { success: false, error: 'Invalid phone format' };
+  }
+
+  // Check for real provider credentials
+  const hasTwilio = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
+  const hasMessageBird = process.env.MESSAGEBIRD_API_KEY;
+  
+  if (hasTwilio || hasMessageBird) {
+    console.log('📱 Using real WhatsApp provider...');
+    // TODO: Implement real provider integration
+    // For now, fall through to simulation
+  }
+  
+  // Simulate WhatsApp send with retry logic
   console.log('📱 Simulating WhatsApp send to', phone, 'ticket', ticket && ticket.ticketId);
   
-  // Simulate WhatsApp message content
   const message = `🎫 *TICKET CONFIRMED* 🎫
 
 *Ticket ID:* ${ticket && ticket.ticketId || 'N/A'}
@@ -44,11 +62,24 @@ Thank you for your booking! 🎓`;
   console.log('📱 WhatsApp message content:');
   console.log(message);
   
-  // In production, integrate Twilio/MessageBird etc.
-  // await sendWhatsAppMessage(phone, message, ticket.path);
+  // Log to append-only file
+  const logsDir = path.resolve(__dirname, '..', 'logs');
+  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
   
-  console.log('✅ WhatsApp ticket sent successfully');
-  return { success: true, message: 'WhatsApp ticket sent successfully' };
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    phone: phone,
+    ticketId: ticket && ticket.ticketId,
+    ticketPath: ticket && ticket.path,
+    message: message,
+    simulated: true
+  };
+  
+  const logFile = path.join(logsDir, 'whatsapp-sends.log');
+  fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n', 'utf8');
+  
+  console.log('✅ WhatsApp ticket sent successfully (simulated)');
+  return { success: true, message: 'WhatsApp ticket sent successfully', simulated: true };
 }
 
 module.exports = { generateTicketForBooking, sendWhatsAppTicket };

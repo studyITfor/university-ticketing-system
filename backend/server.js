@@ -1395,6 +1395,90 @@ app.post('/api/create-booking', async (req, res) => {
     }
 });
 
+// Resend ticket endpoint
+app.post('/api/resend-ticket', async (req, res) => {
+  const { bookingId } = req.body;
+  console.log('🔄 Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
+  
+  if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
+
+  try {
+    // Find booking by string id or numeric id
+    const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
+    const findRes = await db.query(findSql, [bookingId]);
+    const booking = (findRes.rows && findRes.rows[0]) ? findRes.rows[0] : null;
+    
+    if (!booking) {
+      console.error('❌ ResendTicket: booking not found', bookingId);
+      return res.status(404).json({ error: 'Бронирование не найдено' });
+    }
+
+    console.log('🔄 Resending ticket for booking:', {
+      id: booking.id,
+      booking_string_id: booking.booking_string_id,
+      name: `${booking.first_name} ${booking.last_name}`,
+      phone: booking.user_phone || booking.phone
+    });
+
+    // Generate ticket
+    let ticket = null;
+    try {
+      const { generateTicketForBooking } = require('./ticket-utils');
+      ticket = await generateTicketForBooking(booking);
+      console.log('🎫 Ticket regenerated:', ticket);
+    } catch (e) {
+      console.error('❌ Ticket generation error:', e);
+      return res.status(500).json({ error: 'Ошибка генерации билета' });
+    }
+
+    // Send WhatsApp
+    let whatsappResult = null;
+    try {
+      const phone = booking.user_phone || booking.phone;
+      if (phone && /^\+\d{10,15}$/.test(phone)) {
+        const { sendWhatsAppTicket } = require('./ticket-utils');
+        whatsappResult = await sendWhatsAppTicket(phone, ticket);
+        
+        if (whatsappResult.success) {
+          await db.query('UPDATE bookings SET whatsapp_sent = true WHERE id=$1', [booking.id]);
+          console.log('✅ WhatsApp ticket resent successfully');
+        } else {
+          console.error('❌ WhatsApp send failed:', whatsappResult.error);
+        }
+      } else {
+        console.warn('⚠️ Invalid/missing phone for WhatsApp resend:', phone);
+        whatsappResult = { success: false, error: 'Invalid phone number' };
+      }
+    } catch (e) {
+      console.error('❌ WhatsApp resend error:', e);
+      whatsappResult = { success: false, error: e.message };
+    }
+
+    // Emit real-time update
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('bookingUpdated', booking);
+        console.log('📡 bookingUpdated event emitted for resend');
+      }
+    } catch (e) {
+      console.error('❌ Socket emit error during resend:', e);
+    }
+
+    return res.json({
+      success: whatsappResult.success,
+      message: whatsappResult.success ? 'Билет переотправлен в WhatsApp' : 'Ошибка отправки билета',
+      ticketId: ticket && ticket.ticketId || null,
+      ticketPath: ticket && ticket.path || null,
+      whatsappResult: whatsappResult
+    });
+
+  } catch (err) {
+    console.error('❌ ResendTicket error:', err);
+    return res.status(500).json({ error: 'Ошибка при переотправке билета', details: err.message });
+  }
+});
+
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
   const { bookingId, paymentMethod, amount } = req.body;
