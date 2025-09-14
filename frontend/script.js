@@ -1855,11 +1855,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSeatingPlanImage();
 });
 
-// Initialize seating plan image zoom functionality
+// Initialize interactive seating plan with clickable table areas
 function initializeSeatingPlanImage() {
     const image = document.getElementById('seatingPlanImage');
-    if (!image) {
-        console.warn('Seating plan image element not found');
+    const overlay = document.getElementById('tableOverlay');
+    
+    if (!image || !overlay) {
+        console.warn('Seating plan image or overlay element not found');
         return;
     }
 
@@ -1871,21 +1873,136 @@ function initializeSeatingPlanImage() {
 
     image.addEventListener('load', () => {
         console.log('Seating plan image loaded successfully:', image.src);
+        createInteractiveTableAreas();
     });
 
-    let isZoomed = false;
-
-    image.addEventListener('click', () => {
-        if (isZoomed) {
-            // Zoom out
-            image.classList.remove('zoomed');
-            isZoomed = false;
-        } else {
-            // Zoom in
-            image.classList.add('zoomed');
-            isZoomed = true;
+    // Create clickable table areas
+    function createInteractiveTableAreas() {
+        // Clear existing overlay
+        overlay.innerHTML = '';
+        
+        // Get image dimensions
+        const imageWidth = image.offsetWidth;
+        const imageHeight = image.offsetHeight;
+        
+        // Define table positions (these would need to be adjusted based on your actual hall layout)
+        const tablePositions = generateTablePositions(imageWidth, imageHeight);
+        
+        // Create clickable areas for each table
+        tablePositions.forEach((pos, index) => {
+            const tableArea = document.createElement('div');
+            tableArea.className = 'table-area';
+            tableArea.style.left = `${pos.x}%`;
+            tableArea.style.top = `${pos.y}%`;
+            tableArea.style.width = `${pos.width}px`;
+            tableArea.style.height = `${pos.height}px`;
+            tableArea.textContent = pos.tableNumber;
+            tableArea.dataset.table = pos.tableNumber;
+            tableArea.dataset.seat = pos.seatNumber;
+            
+            // Add click handler
+            tableArea.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleTableClick(pos.tableNumber, pos.seatNumber, tableArea);
+            });
+            
+            overlay.appendChild(tableArea);
+        });
+        
+        // Update table statuses based on existing bookings
+        updateTableStatuses();
+    }
+    
+    // Generate table positions (this is a simplified version - you'd need to adjust based on your actual hall layout)
+    function generateTablePositions(imageWidth, imageHeight) {
+        const positions = [];
+        const tableSize = Math.min(imageWidth, imageHeight) * 0.03; // 3% of image size
+        
+        // Generate positions for 36 tables (6 rows x 6 columns)
+        for (let table = 1; table <= 36; table++) {
+            const row = Math.floor((table - 1) / 6);
+            const col = (table - 1) % 6;
+            
+            // Position tables in a grid pattern
+            const x = 10 + (col * 13); // 10% margin + 13% spacing
+            const y = 15 + (row * 12); // 15% from top + 12% spacing
+            
+            positions.push({
+                tableNumber: table,
+                seatNumber: 1, // Default seat number
+                x: x,
+                y: y,
+                width: tableSize,
+                height: tableSize
+            });
         }
-    });
+        
+        return positions;
+    }
+    
+    // Handle table click
+    function handleTableClick(tableNumber, seatNumber, tableElement) {
+        // Remove previous selection
+        document.querySelectorAll('.table-area.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Select current table
+        tableElement.classList.add('selected');
+        
+        // Trigger booking for this table
+        if (window.selectTable) {
+            window.selectTable(tableNumber, seatNumber);
+        } else {
+            // Fallback: scroll to booking form
+            const bookingForm = document.querySelector('.booking-form');
+            if (bookingForm) {
+                bookingForm.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }
+    
+    // Update table statuses based on existing bookings
+    function updateTableStatuses() {
+        // This would be called when booking data is loaded
+        // For now, we'll mark some tables as booked for demonstration
+        const bookedTables = [1, 5, 12, 18, 25, 31]; // Example booked tables
+        
+        bookedTables.forEach(tableNum => {
+            const tableArea = document.querySelector(`[data-table="${tableNum}"]`);
+            if (tableArea) {
+                tableArea.classList.add('booked');
+                tableArea.textContent = '✗';
+            }
+        });
+    }
+    
+    // Make updateTableStatuses available globally
+    window.updateTableStatuses = updateTableStatuses;
+    
+    // Create selectTable function to integrate with existing booking system
+    window.selectTable = function(tableNumber, seatNumber) {
+        console.log(`🎯 Table selected from interactive plan: Table ${tableNumber}, Seat ${seatNumber}`);
+        
+        // Find the corresponding seat element in the existing table grid
+        const seatElement = document.querySelector(`[data-table="${tableNumber}"][data-seat="${seatNumber}"]`);
+        
+        if (seatElement) {
+            // Trigger the existing seat click handler
+            if (window.studentTicketingSystem && window.studentTicketingSystem.handleSeatClick) {
+                window.studentTicketingSystem.handleSeatClick(seatElement, null);
+            } else {
+                console.warn('Student ticketing system not available');
+            }
+        } else {
+            console.warn(`Seat element not found for table ${tableNumber}, seat ${seatNumber}`);
+            // Fallback: scroll to booking form
+            const bookingForm = document.querySelector('.booking-form');
+            if (bookingForm) {
+                bookingForm.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    };
 
     // Double-tap to zoom on mobile
     let lastTap = 0;
