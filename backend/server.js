@@ -1419,9 +1419,9 @@ app.post('/api/confirm-payment', async (req, res) => {
     await db.query('BEGIN');
 
     const txnRes = await db.query(
-      `INSERT INTO payments (transaction_id, user_phone, amount, status, provider, raw_payload, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,now()) RETURNING id`,
-      [`txn_${Date.now()}`, booking.user_phone || booking.phone, amount || 0, 'confirmed', paymentMethod || 'manual', JSON.stringify(req.body)]
+      `INSERT INTO payments (transaction_id, booking_id, user_phone, amount, status, provider, raw_payload, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,now()) RETURNING id`,
+      [`txn_${Date.now()}`, booking.booking_string_id || booking.id, booking.user_phone || booking.phone, amount || 0, 'confirmed', paymentMethod || 'manual', JSON.stringify(req.body)]
     );
 
     const updateRes = await db.query(
