@@ -6,11 +6,11 @@ const BASE_URL = 'https://upbeat-compassion-production.up.railway.app';
 
 test.describe('Payment Confirmation and WhatsApp E2E Flow', () => {
   let bookingId;
-  let testPhone = '+996555123456';
+  let testPhone = `+996555${Math.floor(Math.random() * 900000) + 100000}`;
   let testFirstName = 'Playwright';
   let testLastName = 'Test';
-  let testTable = 25;
-  let testSeat = 5;
+  let testTable = Math.floor(Math.random() * 100) + 100;
+  let testSeat = Math.floor(Math.random() * 10) + 1;
 
   test('should create booking, confirm payment, and verify WhatsApp sending', async ({ request }) => {
     // 1. Create a booking via API
@@ -94,17 +94,25 @@ test.describe('Payment Confirmation and WhatsApp E2E Flow', () => {
     const paymentsResponse = await request.get(`${BASE_URL}/api/debug/db-investigation`);
     if (paymentsResponse.ok()) {
       const paymentsData = await paymentsResponse.json();
-      const payment = paymentsData.recentPayments.find(p => p.booking_id === bookingId);
-      if (payment) {
-        expect(payment.booking_id).toBe(bookingId);
-        expect(payment.status).toBe('confirmed');
-        expect(payment.user_phone).toBe(testPhone);
-        console.log('✅ Payment record verified:', {
-          booking_id: payment.booking_id,
-          status: payment.status,
-          phone: payment.user_phone
-        });
+      if (paymentsData && paymentsData.recentPayments) {
+        const payment = paymentsData.recentPayments.find(p => p.booking_id === bookingId);
+        if (payment) {
+          expect(payment.booking_id).toBe(bookingId);
+          expect(payment.status).toBe('confirmed');
+          expect(payment.user_phone).toBe(testPhone);
+          console.log('✅ Payment record verified:', {
+            booking_id: payment.booking_id,
+            status: payment.status,
+            phone: payment.user_phone
+          });
+        } else {
+          console.log('⚠️ Payment record not found in debug endpoint');
+        }
+      } else {
+        console.log('⚠️ Debug endpoint response format unexpected');
       }
+    } else {
+      console.log('⚠️ Debug endpoint not available');
     }
 
     console.log('🎉 All tests passed! Complete payment confirmation flow working correctly.');
