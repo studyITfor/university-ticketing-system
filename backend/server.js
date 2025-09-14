@@ -53,7 +53,7 @@ app.get('/admin.html', (req, res) => {
 });
 
 // Serve static files from public directory (if exists)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Health check endpoints
 app.get('/api/health', (req, res) => {
