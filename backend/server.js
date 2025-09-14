@@ -304,6 +304,32 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
+// Get all bookings for admin panel
+app.get('/api/bookings', async (req, res) => {
+    try {
+        console.log('🔍 Admin requesting all bookings...');
+        
+        const result = await db.query(`
+            SELECT b.*, u.phone 
+            FROM bookings b 
+            LEFT JOIN users u ON b.user_phone = u.phone 
+            ORDER BY b.created_at DESC
+        `);
+        
+        console.log(`✅ Found ${result.rows.length} bookings for admin`);
+        
+        res.json(result.rows);
+        
+    } catch (error) {
+        console.error('❌ Error fetching bookings:', error);
+        res.status(500).json({
+            status: 'error',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Database migration endpoint
 app.post('/api/migrate-db', async (req, res) => {
     try {
@@ -1213,14 +1239,14 @@ app.post('/api/create-booking', async (req, res) => {
             return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
         }
         
-        // Validate phone number (E.164 format)
+        // Validate WhatsApp number (E.164 format)
         if (!bookingData.phone) {
-            return res.status(400).json({ error: 'Phone number is required.' });
+            return res.status(400).json({ error: 'WhatsApp number is required.' });
         }
         
-        const phoneRegex = /^\+\d{8,15}$/;
+        const phoneRegex = /^\+\d{10,15}$/;
         if (!phoneRegex.test(bookingData.phone)) {
-            return res.status(400).json({ error: 'Invalid phone number format. Please use E.164 format (e.g., +996555123456).' });
+            return res.status(400).json({ error: 'Invalid WhatsApp number format. Please use E.164 format starting with + and containing 10-15 digits (e.g., +1234567890).' });
         }
         
         console.log('✅ Booking data after parsing:', {
@@ -1247,10 +1273,10 @@ app.post('/api/create-booking', async (req, res) => {
             [bookingData.phone, 'user']
         );
         
-        // Save booking to database
+        // Save booking to database with pending status (requires manual admin confirmation)
         const result = await db.query(
             'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            [bookingId, bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 'reserved']
+            [bookingId, bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 'pending']
         );
         
         // Emit booking created event to all admins

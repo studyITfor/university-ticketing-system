@@ -591,11 +591,27 @@ class AdminPanel {
 
     async loadBookings() {
         try {
-            const response = await fetch('/api/bookings');
+            // Load bookings from the database via the seat statuses endpoint
+            const response = await fetch('/api/seat-statuses');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            this.bookings = await response.json();
+            const data = await response.json();
+            
+            // Initialize empty bookings object
+            this.bookings = {};
+            
+            // Load bookings from the database
+            const bookingsResponse = await fetch('/api/bookings');
+            if (bookingsResponse.ok) {
+                const bookingsData = await bookingsResponse.json();
+                if (Array.isArray(bookingsData)) {
+                    bookingsData.forEach(booking => {
+                        this.bookings[booking.booking_string_id || booking.id] = booking;
+                    });
+                }
+            }
+            
             this.renderBookingsTable();
             this.renderPrebookedTable();
             this.updatePrebookedStats();
@@ -667,27 +683,36 @@ class AdminPanel {
 
         filteredBookings.forEach(booking => {
             const row = document.createElement('tr');
+            const bookingId = booking.booking_string_id || booking.id;
+            const phone = booking.phone || booking.user_phone;
+            const firstName = booking.first_name || booking.firstName || '';
+            const lastName = booking.last_name || booking.lastName || '';
+            const tableNumber = booking.table_number || booking.table;
+            const seatNumber = booking.seat_number || booking.seat;
+            const status = booking.status || 'pending';
+            const createdDate = booking.created_at || booking.bookingDate;
+            
             row.innerHTML = `
-                <td>${booking.id}</td>
-                <td>${booking.firstName} ${booking.lastName}</td>
-                <td>${booking.phone}</td>
-                <td>${booking.email}</td>
-                <td>Стол ${booking.table}, Место ${booking.seat}</td>
-                <td><span class="status-badge status-${booking.status}">${this.getStatusText(booking.status)}</span></td>
-                <td>${new Date(booking.bookingDate).toLocaleDateString('ru-RU')}</td>
+                <td>${bookingId}</td>
+                <td>${firstName} ${lastName}</td>
+                <td>${phone}</td>
+                <td>-</td>
+                <td>Стол ${tableNumber}, Место ${seatNumber}</td>
+                <td><span class="status-badge status-${status}">${this.getStatusText(status)}</span></td>
+                <td>${new Date(createdDate).toLocaleDateString('ru-RU')}</td>
                 <td>
                     <div class="action-buttons">
-                        ${booking.status === 'pending' ? `
-                            <button class="btn btn-success" onclick="adminPanel.confirmPayment('${booking.id}')">
+                        ${status === 'pending' ? `
+                            <button class="btn btn-success" onclick="adminPanel.confirmPayment('${bookingId}')">
                                 <i class="fas fa-check"></i> Подтвердить оплату
                             </button>
                         ` : ''}
-                        ${booking.status === 'paid' ? `
-                            <button class="btn btn-primary" onclick="adminPanel.generateTicket('${booking.id}')">
+                        ${status === 'paid' || status === 'confirmed' ? `
+                            <button class="btn btn-primary" onclick="adminPanel.generateTicket('${bookingId}')">
                                 <i class="fas fa-ticket-alt"></i> Билет
                             </button>
                         ` : ''}
-                        <button class="btn btn-danger" onclick="adminPanel.deleteBooking('${booking.id}')">
+                        <button class="btn btn-danger" onclick="adminPanel.deleteBooking('${bookingId}')">
                             <i class="fas fa-trash"></i> Удалить
                         </button>
                     </div>
@@ -702,13 +727,17 @@ class AdminPanel {
         const statusFilter = document.getElementById('statusFilter').value;
 
         return bookings.filter(booking => {
+            const firstName = (booking.first_name || booking.firstName || '').toLowerCase();
+            const lastName = (booking.last_name || booking.lastName || '').toLowerCase();
+            const phone = (booking.phone || booking.user_phone || '').toLowerCase();
+            const status = booking.status || 'pending';
+            
             const matchesSearch = !searchTerm || 
-                booking.firstName.toLowerCase().includes(searchTerm) ||
-                booking.lastName.toLowerCase().includes(searchTerm) ||
-                booking.phone.includes(searchTerm) ||
-                booking.email.toLowerCase().includes(searchTerm);
+                firstName.includes(searchTerm) ||
+                lastName.includes(searchTerm) ||
+                phone.includes(searchTerm);
 
-            const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
+            const matchesStatus = statusFilter === 'all' || status === statusFilter;
 
             return matchesSearch && matchesStatus;
         });
@@ -721,8 +750,9 @@ class AdminPanel {
     getStatusText(status) {
         const statusMap = {
             'pending': 'Ожидает оплаты',
+            'reserved': 'Зарезервировано',
             'paid': 'Оплачено',
-            'Оплачен': 'Оплачен',
+            'confirmed': 'Подтверждено',
             'prebooked': 'Предварительно забронировано',
             'cancelled': 'Отменено'
         };

@@ -47,6 +47,29 @@ class StudentTicketingSystem {
     }
 
     setupEventListeners() {
+        // WhatsApp number input handling - ensure + prefix is maintained
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', (e) => {
+                let value = e.target.value;
+                // Ensure it starts with +
+                if (!value.startsWith('+')) {
+                    value = '+' + value.replace(/[^0-9]/g, '');
+                } else {
+                    // Remove any non-digit characters except the leading +
+                    value = '+' + value.slice(1).replace(/[^0-9]/g, '');
+                }
+                e.target.value = value;
+            });
+            
+            phoneInput.addEventListener('keydown', (e) => {
+                // Prevent deleting the + symbol
+                if (e.target.selectionStart <= 1 && (e.key === 'Backspace' || e.key === 'Delete')) {
+                    e.preventDefault();
+                }
+            });
+        }
+        
         // Seat selection - comprehensive event support for all devices
         const tablesContainer = document.getElementById('tablesContainer');
         
@@ -455,10 +478,10 @@ class StudentTicketingSystem {
         if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
         // Email validation removed - phone-only authentication
 
-        // Phone number validation (E.164 format)
-        const phoneRegex = /^\+\d{8,15}$/;
+        // WhatsApp number validation (E.164 format)
+        const phoneRegex = /^\+\d{10,15}$/;
         if (data.phone && !phoneRegex.test(data.phone)) {
-            errors.push('Please enter a valid phone number in E.164 format (e.g., +996555123456)');
+            errors.push('Please enter a valid WhatsApp number starting with + and containing 10-15 digits (e.g., +1234567890)');
         }
 
         // Duplicate phone validation removed
