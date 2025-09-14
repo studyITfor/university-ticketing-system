@@ -55,6 +55,25 @@ app.get('/admin.html', (req, res) => {
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Health check endpoints
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Readiness check (DB)
+app.get('/api/health/readiness', async (req, res) => {
+    try {
+        const db = require('./database');
+        if (db && typeof db.query === 'function') {
+            await db.query('SELECT 1');
+            return res.json({ status: 'ready', db: true });
+        }
+        return res.status(500).json({ status: 'not ready', db: false });
+    } catch (err) {
+        return res.status(500).json({ status: 'not ready', db: false, error: err.message });
+    }
+});
+
 // Ensure tickets directory exists
 const ticketsDir = path.join(__dirname, 'tickets');
 fs.ensureDirSync(ticketsDir);
