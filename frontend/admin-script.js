@@ -683,14 +683,14 @@ class AdminPanel {
 
         filteredBookings.forEach(booking => {
             const row = document.createElement('tr');
-            const bookingId = booking.booking_string_id || booking.id;
-            const phone = booking.phone || booking.user_phone;
-            const firstName = booking.first_name || booking.firstName || '';
-            const lastName = booking.last_name || booking.lastName || '';
-            const tableNumber = booking.table_number || booking.table;
-            const seatNumber = booking.seat_number || booking.seat;
+            const bookingId = booking.booking_string_id || booking.id || 'N/A';
+            const phone = booking.phone || booking.user_phone || 'N/A';
+            const firstName = booking.first_name || booking.firstName || 'N/A';
+            const lastName = booking.last_name || booking.lastName || 'N/A';
+            const tableNumber = booking.table_number || booking.table || 'N/A';
+            const seatNumber = booking.seat_number || booking.seat || 'N/A';
             const status = booking.status || 'pending';
-            const createdDate = booking.created_at || booking.bookingDate;
+            const createdDate = booking.created_at || booking.bookingDate || new Date().toISOString();
             
             row.innerHTML = `
                 <td>${bookingId}</td>
@@ -735,7 +735,8 @@ class AdminPanel {
             const matchesSearch = !searchTerm || 
                 firstName.includes(searchTerm) ||
                 lastName.includes(searchTerm) ||
-                phone.includes(searchTerm);
+                phone.includes(searchTerm) ||
+                (booking.booking_string_id || booking.id || '').toLowerCase().includes(searchTerm);
 
             const matchesStatus = statusFilter === 'all' || status === statusFilter;
 
@@ -957,7 +958,12 @@ class AdminPanel {
         if (!this.bookings[bookingId]) return;
         
         const booking = this.bookings[bookingId];
-        if (confirm(`Delete бронирование для ${booking.firstName} ${booking.lastName} (Table ${booking.table}, Seat ${booking.seat})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
+        const firstName = booking.first_name || booking.firstName || 'N/A';
+        const lastName = booking.last_name || booking.lastName || 'N/A';
+        const tableNumber = booking.table_number || booking.table || 'N/A';
+        const seatNumber = booking.seat_number || booking.seat || 'N/A';
+        
+        if (confirm(`Delete бронирование для ${firstName} ${lastName} (Table ${tableNumber}, Seat ${seatNumber})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
             try {
                 // Show loading state
                 const deleteButton = document.querySelector(`button[onclick="adminPanel.deleteBooking('${bookingId}')"]`);
@@ -975,8 +981,8 @@ class AdminPanel {
 
                 if (result.success) {
                     // Store booking details for confirmation message
-                    const seatInfo = `Table ${booking.table}, Seat ${booking.seat}`;
-                    const customerName = `${booking.firstName} ${booking.lastName}`;
+                    const seatInfo = `Table ${tableNumber}, Seat ${seatNumber}`;
+                    const customerName = `${firstName} ${lastName}`;
                     
                     // Remove the booking from local data
                     delete this.bookings[bookingId];

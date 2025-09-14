@@ -330,6 +330,71 @@ app.get('/api/bookings', async (req, res) => {
     }
 });
 
+// Delete booking endpoint
+app.delete('/api/delete-booking/:bookingId', async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        console.log(`🗑️ Admin requesting to delete booking: ${bookingId}`);
+        
+        // First, get the booking details to free up the seat
+        const bookingResult = await db.query(
+            'SELECT * FROM bookings WHERE booking_string_id = $1',
+            [bookingId]
+        );
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Booking not found'
+            });
+        }
+        
+        const booking = bookingResult.rows[0];
+        
+        // Delete the booking
+        await db.query(
+            'DELETE FROM bookings WHERE booking_string_id = $1',
+            [bookingId]
+        );
+        
+        // Emit seat status update to free up the seat
+        const seatId = `${booking.table_number}-${booking.seat_number}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'available',
+            timestamp: Date.now()
+        });
+        
+        // Emit booking deleted event to admins
+        io.to('admins').emit('update-seat-status', {
+            type: 'booking-deleted',
+            data: {
+                bookingId: bookingId,
+                table: booking.table_number,
+                seat: booking.seat_number,
+                seatId: seatId
+            },
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Booking ${bookingId} deleted successfully`);
+        
+        res.json({
+            success: true,
+            message: 'Booking deleted successfully',
+            seatId: seatId
+        });
+        
+    } catch (error) {
+        console.error('❌ Error deleting booking:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Database migration endpoint
 app.post('/api/migrate-db', async (req, res) => {
     try {
