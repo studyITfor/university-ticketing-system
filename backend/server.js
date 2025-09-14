@@ -1437,6 +1437,7 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
       const { generateTicketForBooking } = require('./ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
+      console.log('Ticket generated:', ticket);
     } catch (e) {
       console.error('Ticket generation error', e);
     }
@@ -1448,6 +1449,7 @@ app.post('/api/confirm-payment', async (req, res) => {
         const { sendWhatsAppTicket } = require('./ticket-utils');
         await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
         await db.query('UPDATE bookings SET whatsapp_sent = true WHERE id=$1', [updatedBooking.id]);
+        console.log('WhatsApp sent to:', phone);
       } else {
         console.warn('ConfirmPayment: invalid/missing phone, cannot send WhatsApp ticket', phone);
       }
@@ -1471,7 +1473,8 @@ app.post('/api/confirm-payment', async (req, res) => {
   } catch (err) {
     try { await db.query('ROLLBACK'); } catch(e) {}
     console.error('ConfirmPayment error:', err);
-    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты' });
+    console.error('Error stack:', err.stack);
+    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты', details: err.message });
   }
 });
 
