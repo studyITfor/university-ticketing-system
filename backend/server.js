@@ -2443,6 +2443,70 @@ app.post('/api/test/emit-seat-update', (req, res) => {
     }
 });
 
+// Database investigation endpoint
+app.get('/api/debug/db-investigation', async (req, res) => {
+    try {
+        console.log('🔍 Running database investigation...');
+        
+        // 1. Check table structure
+        const columnsResult = await db.query(`
+            SELECT column_name, data_type, is_nullable 
+            FROM information_schema.columns 
+            WHERE table_name = 'bookings' 
+            ORDER BY ordinal_position
+        `);
+        
+        // 2. Check recent bookings
+        const recentBookings = await db.query(`
+            SELECT id, booking_string_id, first_name, last_name, status, created_at
+            FROM bookings 
+            ORDER BY created_at DESC 
+            LIMIT 5
+        `);
+        
+        // 3. Check for specific booking ID that failed
+        const testBookingId = 'BKMFJU7O2P';
+        const byStringId = await db.query(
+            'SELECT * FROM bookings WHERE booking_string_id = $1',
+            [testBookingId]
+        );
+        
+        const byNumericId = await db.query(
+            'SELECT * FROM bookings WHERE id::text = $1',
+            [testBookingId]
+        );
+        
+        // 4. Check payments table
+        let paymentsColumns = [];
+        try {
+            const paymentsResult = await db.query(`
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'payments' 
+                ORDER BY ordinal_position
+            `);
+            paymentsColumns = paymentsResult.rows;
+        } catch (e) {
+            console.log('Payments table does not exist');
+        }
+        
+        res.json({
+            success: true,
+            investigation: {
+                bookingsColumns: columnsResult.rows,
+                recentBookings: recentBookings.rows,
+                testBookingByStringId: byStringId.rows,
+                testBookingByNumericId: byNumericId.rows,
+                paymentsColumns: paymentsColumns
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Database investigation error:', error);
+        res.status(500).json({ error: error.message, stack: error.stack });
+    }
+});
+
 // Test endpoint to check Socket.IO room status
 app.get('/api/test/socket-status', (req, res) => {
     try {
