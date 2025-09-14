@@ -248,6 +248,51 @@ async function emitSeatUpdate() {
     }
 }
 
+// Database test endpoint
+app.get('/api/test-db', async (req, res) => {
+    try {
+        console.log('🔍 Testing database connection...');
+        
+        // Test basic connection
+        const result = await db.query('SELECT NOW()');
+        console.log('✅ Database connection successful:', result.rows[0]);
+        
+        // Check if bookings table exists
+        const tableCheck = await db.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'bookings'
+            );
+        `);
+        console.log('📋 Bookings table exists:', tableCheck.rows[0].exists);
+        
+        // Check table schema
+        const schemaCheck = await db.query(`
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns 
+            WHERE table_name = 'bookings'
+            ORDER BY ordinal_position;
+        `);
+        
+        res.json({
+            status: 'ok',
+            database_connected: true,
+            bookings_table_exists: tableCheck.rows[0].exists,
+            table_schema: schemaCheck.rows,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Database test error:', error);
+        res.status(500).json({
+            status: 'error',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Socket.IO connection handling with role-based access control
 io.on('connection', (socket) => {
     console.log('🔌 Client connected:', socket.id);
