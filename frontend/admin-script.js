@@ -766,6 +766,9 @@ class AdminPanel {
                             <button class="btn btn-primary" onclick="adminPanel.generateTicket('${bookingId}')">
                                 <i class="fas fa-ticket-alt"></i> Билет
                             </button>
+                            <button class="btn btn-info" onclick="adminPanel.resendTicket('${bookingId}')">
+                                <i class="fas fa-paper-plane"></i> Переотправить билет
+                            </button>
                         ` : ''}
                         <button class="btn btn-danger" onclick="adminPanel.deleteBooking('${bookingId}')">
                             <i class="fas fa-trash"></i> Удалить
@@ -922,6 +925,47 @@ class AdminPanel {
             this.hideModal('paymentModal');
             
             alert('Бронирование отменено.');
+        }
+    }
+
+    async resendTicket(bookingId) {
+        const booking = this.bookings[bookingId];
+        if (!booking) {
+            alert('❌ Бронирование не найдено');
+            return;
+        }
+
+        if (booking.status !== 'paid' && booking.status !== 'confirmed') {
+            alert('❌ Билет можно переотправить только для оплаченных бронирований');
+            return;
+        }
+
+        if (!confirm(`Переотправить билет для ${booking.first_name || booking.firstName} ${booking.last_name || booking.lastName}?\n\nТелефон: ${booking.user_phone || booking.phone}`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/resend-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bookingId: bookingId
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification(`✅ Билет переотправлен в WhatsApp!`, 'success');
+                console.log('✅ Ticket resent successfully:', result);
+            } else {
+                throw new Error(result.message || 'Ошибка при переотправке билета');
+            }
+        } catch (error) {
+            console.error('Error resending ticket:', error);
+            this.showNotification(`❌ Ошибка при переотправке билета: ${error.message}`, 'error');
         }
     }
 
