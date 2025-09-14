@@ -304,6 +304,111 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
+// Database migration endpoint
+app.post('/api/migrate-db', async (req, res) => {
+    try {
+        console.log('🔧 Starting database migration...');
+        
+        // Check if we have the correct schema
+        const schemaCheck = await db.query(`
+            SELECT column_name
+            FROM information_schema.columns 
+            WHERE table_name = 'bookings'
+            ORDER BY ordinal_position;
+        `);
+        
+        const hasBookingStringId = schemaCheck.rows.some(row => row.column_name === 'booking_string_id');
+        
+        if (hasBookingStringId) {
+            console.log('✅ Database schema is already correct');
+            return res.json({
+                status: 'ok',
+                message: 'Database schema is already correct',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        console.log('🔧 Schema needs migration, recreating tables...');
+        
+        // Drop and recreate the bookings table with correct schema
+        await db.query('DROP TABLE IF EXISTS bookings CASCADE');
+        console.log('✅ Dropped old bookings table');
+        
+        // Create the correct bookings table
+        await db.query(`
+            CREATE TABLE bookings (
+                id SERIAL PRIMARY KEY,
+                booking_string_id VARCHAR(50) UNIQUE,
+                user_phone VARCHAR(20) NOT NULL,
+                event_id INT NOT NULL,
+                seat VARCHAR(50) NOT NULL,
+                table_number INT,
+                seat_number INT,
+                first_name VARCHAR(100),
+                last_name VARCHAR(100),
+                status VARCHAR(20) DEFAULT 'reserved',
+                payment_date TIMESTAMP,
+                payment_confirmed_by VARCHAR(50),
+                ticket_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT now(),
+                updated_at TIMESTAMP DEFAULT now()
+            );
+        `);
+        console.log('✅ Created new bookings table with correct schema');
+        
+        // Test the new schema
+        const testBooking = {
+            booking_string_id: 'TEST_' + Date.now(),
+            user_phone: '+996555123456',
+            event_id: 1,
+            seat: '1-1',
+            table_number: 1,
+            seat_number: 1,
+            first_name: 'Test',
+            last_name: 'User',
+            status: 'reserved'
+        };
+        
+        const insertResult = await db.query(`
+            INSERT INTO bookings (
+                booking_string_id, user_phone, event_id, seat, 
+                table_number, seat_number, first_name, last_name, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *
+        `, [
+            testBooking.booking_string_id,
+            testBooking.user_phone,
+            testBooking.event_id,
+            testBooking.seat,
+            testBooking.table_number,
+            testBooking.seat_number,
+            testBooking.first_name,
+            testBooking.last_name,
+            testBooking.status
+        ]);
+        
+        console.log('✅ Test booking created successfully:', insertResult.rows[0]);
+        
+        // Clean up test data
+        await db.query('DELETE FROM bookings WHERE booking_string_id = $1', [testBooking.booking_string_id]);
+        console.log('🧹 Test data cleaned up');
+        
+        res.json({
+            status: 'ok',
+            message: 'Database migration completed successfully',
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Database migration error:', error);
+        res.status(500).json({
+            status: 'error',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Socket.IO connection handling with role-based access control
 io.on('connection', (socket) => {
     console.log('🔌 Client connected:', socket.id);
