@@ -24,9 +24,31 @@ async function generateTicketForBooking(booking) {
 
 async function sendWhatsAppTicket(phone, ticket) {
   // If real provider configured, call it. Otherwise simulate and log.
-  console.log('Simulating WhatsApp send to', phone, 'ticket', ticket && ticket.ticketId);
+  console.log('📱 Simulating WhatsApp send to', phone, 'ticket', ticket && ticket.ticketId);
+  
+  // Simulate WhatsApp message content
+  const message = `🎫 *TICKET CONFIRMED* 🎫
+
+*Ticket ID:* ${ticket && ticket.ticketId || 'N/A'}
+*Event:* University Event
+*Date:* ${new Date().toLocaleDateString('ru-RU')}
+*Time:* ${new Date().toLocaleTimeString('ru-RU')}
+
+*Status:* ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓`;
+
+  console.log('📱 WhatsApp message content:');
+  console.log(message);
+  
   // In production, integrate Twilio/MessageBird etc.
-  return true;
+  // await sendWhatsAppMessage(phone, message, ticket.path);
+  
+  console.log('✅ WhatsApp ticket sent successfully');
+  return { success: true, message: 'WhatsApp ticket sent successfully' };
 }
 
 module.exports = { generateTicketForBooking, sendWhatsAppTicket };

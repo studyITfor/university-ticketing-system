@@ -1398,7 +1398,13 @@ app.post('/api/create-booking', async (req, res) => {
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
   const { bookingId, paymentMethod, amount } = req.body;
-  console.log('confirm-payment called', req.body);
+  console.log('🔍 Payment confirmation request:', {
+    bookingId,
+    paymentMethod,
+    amount,
+    timestamp: new Date().toISOString(),
+    fullBody: req.body
+  });
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
   try {
@@ -1406,8 +1412,19 @@ app.post('/api/confirm-payment', async (req, res) => {
     const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
     const findRes = await db.query(findSql, [bookingId]);
     const booking = (findRes.rows && findRes.rows[0]) ? findRes.rows[0] : null;
+    console.log('🔍 Booking lookup result:', {
+      found: !!booking,
+      bookingId: bookingId,
+      bookingData: booking ? {
+        id: booking.id,
+        booking_string_id: booking.booking_string_id,
+        status: booking.status,
+        name: `${booking.first_name} ${booking.last_name}`
+      } : null
+    });
+    
     if (!booking) {
-      console.error('ConfirmPayment: booking not found', bookingId);
+      console.error('❌ ConfirmPayment: booking not found', bookingId);
       return res.status(404).json({ error: 'Бронирование не найдено' });
     }
 
@@ -1416,21 +1433,42 @@ app.post('/api/confirm-payment', async (req, res) => {
       return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
     }
 
+    console.log('💳 Starting payment transaction...');
     await db.query('BEGIN');
 
+    const paymentData = {
+      transaction_id: `txn_${Date.now()}`,
+      booking_id: booking.booking_string_id || booking.id,
+      user_phone: booking.user_phone || booking.phone,
+      amount: amount || 0,
+      status: 'confirmed',
+      provider: paymentMethod || 'manual',
+      raw_payload: JSON.stringify(req.body)
+    };
+    
+    console.log('💳 Inserting payment record:', paymentData);
     const txnRes = await db.query(
       `INSERT INTO payments (transaction_id, booking_id, user_phone, amount, status, provider, raw_payload, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,now()) RETURNING id`,
-      [`txn_${Date.now()}`, booking.booking_string_id || booking.id, booking.user_phone || booking.phone, amount || 0, 'confirmed', paymentMethod || 'manual', JSON.stringify(req.body)]
+      [paymentData.transaction_id, paymentData.booking_id, paymentData.user_phone, paymentData.amount, paymentData.status, paymentData.provider, paymentData.raw_payload]
     );
 
+    console.log('📝 Updating booking status to paid...');
     const updateRes = await db.query(
       `UPDATE bookings SET status=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       ['paid', booking.id]
     );
 
     const updatedBooking = updateRes.rows[0];
+    console.log('✅ Booking updated:', {
+      id: updatedBooking.id,
+      booking_string_id: updatedBooking.booking_string_id,
+      status: updatedBooking.status,
+      name: `${updatedBooking.first_name} ${updatedBooking.last_name}`
+    });
+    
     await db.query('COMMIT');
+    console.log('✅ Payment transaction committed successfully');
 
     // generate ticket (PDF or text)
     let ticket = null;
@@ -1459,9 +1497,15 @@ app.post('/api/confirm-payment', async (req, res) => {
 
     // emit real-time update
     try {
-      if (io) io.emit('bookingUpdated', updatedBooking);
+      console.log('📡 Emitting bookingUpdated event...');
+      if (io) {
+        io.emit('bookingUpdated', updatedBooking);
+        console.log('✅ bookingUpdated event emitted successfully');
+      } else {
+        console.warn('⚠️ Socket.IO not available for real-time updates');
+      }
     } catch (e) {
-      console.error('Socket emit error', e);
+      console.error('❌ Socket emit error', e);
     }
 
     return res.json({
