@@ -95,6 +95,12 @@ async function initializeApp() {
         // Run migration to create tables
         const { pool } = require('./database');
         
+        // Skip database initialization if pool is null (local testing without DATABASE_URL)
+        if (!pool) {
+            console.log('⚠️ Skipping database initialization - no DATABASE_URL provided');
+            return;
+        }
+        
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
