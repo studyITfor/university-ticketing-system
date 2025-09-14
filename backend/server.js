@@ -1431,19 +1431,25 @@ app.post('/api/resend-ticket', async (req, res) => {
       return res.status(500).json({ error: 'Ошибка генерации билета' });
     }
 
-    // Send WhatsApp
+    // Send WhatsApp via Green API or simulation
     let whatsappResult = null;
     try {
       const phone = booking.user_phone || booking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
+        console.log('📱 Resending WhatsApp ticket to:', phone);
         const { sendWhatsAppTicket } = require('./ticket-utils');
         whatsappResult = await sendWhatsAppTicket(phone, ticket);
         
         if (whatsappResult.success) {
-          await db.query('UPDATE bookings SET whatsapp_sent = true WHERE id=$1', [booking.id]);
-          console.log('✅ WhatsApp ticket resent successfully');
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1 WHERE id=$2', 
+            [whatsappResult.textMessageId || whatsappResult.fileMessageId, booking.id]);
+          console.log('✅ WhatsApp ticket resent successfully:', {
+            phone: phone,
+            provider: whatsappResult.provider,
+            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId
+          });
         } else {
-          console.error('❌ WhatsApp send failed:', whatsappResult.error);
+          console.error('❌ WhatsApp resend failed:', whatsappResult.error);
         }
       } else {
         console.warn('⚠️ Invalid/missing phone for WhatsApp resend:', phone);
@@ -1564,19 +1570,33 @@ app.post('/api/confirm-payment', async (req, res) => {
       console.error('Ticket generation error', e);
     }
 
-    // send whatsapp (simulate if provider not configured)
+    // send whatsapp via Green API or simulation
+    let whatsappResult = null;
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
+        console.log('📱 Sending WhatsApp ticket to:', phone);
         const { sendWhatsAppTicket } = require('./ticket-utils');
-        await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
-        await db.query('UPDATE bookings SET whatsapp_sent = true WHERE id=$1', [updatedBooking.id]);
-        console.log('WhatsApp sent to:', phone);
+        whatsappResult = await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
+        
+        if (whatsappResult.success) {
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1 WHERE id=$2', 
+            [whatsappResult.textMessageId || whatsappResult.fileMessageId, updatedBooking.id]);
+          console.log('✅ WhatsApp sent successfully:', {
+            phone: phone,
+            provider: whatsappResult.provider,
+            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId
+          });
+        } else {
+          console.error('❌ WhatsApp send failed:', whatsappResult.error);
+        }
       } else {
-        console.warn('ConfirmPayment: invalid/missing phone, cannot send WhatsApp ticket', phone);
+        console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
+        whatsappResult = { success: false, error: 'Invalid phone number' };
       }
     } catch (e) {
-      console.error('WhatsApp send error', e);
+      console.error('❌ WhatsApp send error:', e);
+      whatsappResult = { success: false, error: e.message };
     }
 
     // emit real-time update
