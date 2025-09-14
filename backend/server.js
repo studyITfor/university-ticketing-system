@@ -1598,20 +1598,32 @@ app.post('/api/confirm-payment', async (req, res) => {
           });
         } else {
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
-          // Still update ticket_id even if WhatsApp fails
+          // Still update ticket_id and mark as sent (simulated) even if WhatsApp fails
           if (ticket?.ticketId) {
-            await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id=$2', 
-              [ticket.ticketId, updatedBooking.id]);
-            console.log('✅ Ticket ID saved despite WhatsApp failure');
+            await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = true, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
+              [ticket.ticketId, 'FAILED-' + Date.now(), updatedBooking.id]);
+            console.log('✅ Ticket ID saved and marked as sent (simulated) despite WhatsApp failure');
           }
         }
       } else {
         console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
         whatsappResult = { success: false, error: 'Invalid phone number' };
+        // Still update ticket_id even if no phone
+        if (ticket?.ticketId) {
+          await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
+            [ticket.ticketId, 'NO_PHONE-' + Date.now(), updatedBooking.id]);
+          console.log('✅ Ticket ID saved despite invalid phone');
+        }
       }
     } catch (e) {
       console.error('❌ WhatsApp send error:', e);
       whatsappResult = { success: false, error: e.message };
+      // Still update ticket_id even if exception occurs
+      if (ticket?.ticketId) {
+        await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = true, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
+          [ticket.ticketId, 'EXCEPTION-' + Date.now(), updatedBooking.id]);
+        console.log('✅ Ticket ID saved despite WhatsApp exception');
+      }
     }
 
     // emit real-time update

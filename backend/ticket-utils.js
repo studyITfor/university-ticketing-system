@@ -162,7 +162,14 @@ Thank you for your booking! 🎓`;
   });
   
   console.log('✅ WhatsApp ticket sent successfully (simulated)');
-  return { success: true, message: 'WhatsApp ticket sent successfully (simulated)', simulated: true };
+  return { 
+    success: true, 
+    message: 'WhatsApp ticket sent successfully (simulated)', 
+    simulated: true,
+    provider: 'SIMULATION',
+    textMessageId: 'SIMULATED-' + Date.now(),
+    fileMessageId: 'SIMULATED-' + Date.now()
+  };
 }
 
 // Retry function with exponential backoff
