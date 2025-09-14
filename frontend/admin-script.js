@@ -401,6 +401,8 @@ class AdminPanel {
         this.generateHallPreview();
         // Initialize Socket.IO connection for real-time updates
         this.initializeSocket();
+        // Setup real-time updates with Socket.IO and polling fallback
+        this.setupRealtimeUpdates();
         // Initialize seating plan image zoom functionality
         this.initializeSeatingPlanImage();
     }
@@ -605,6 +607,55 @@ class AdminPanel {
             this.renderPrebookedTable();
             this.updatePrebookedStats();
         }
+    }
+
+    // Setup Socket.IO connection and polling fallback
+    setupRealtimeUpdates() {
+        // Connect to Socket.IO
+        this.socket = io();
+        
+        // Handle connection
+        this.socket.on('connect', () => {
+            console.log('Connected to server via Socket.IO');
+            this.socket.emit('requestSeatData');
+        });
+        
+        // Handle seat data updates
+        this.socket.on('seatData', (data) => {
+            console.log('Received seat data via Socket.IO:', data);
+            this.bookings = {};
+            data.forEach(booking => {
+                this.bookings[booking.id] = booking;
+            });
+            this.renderBookingsTable();
+            this.renderPrebookedTable();
+            this.updatePrebookedStats();
+        });
+        
+        // Handle seat updates
+        this.socket.on('seatUpdate', (data) => {
+            console.log('Received seat update via Socket.IO:', data);
+            // Update seat statuses in real-time
+        });
+        
+        // Handle disconnection
+        this.socket.on('disconnect', () => {
+            console.log('Disconnected from server, starting polling fallback');
+            this.startPollingFallback();
+        });
+        
+        // Start polling fallback as backup
+        this.startPollingFallback();
+    }
+    
+    startPollingFallback() {
+        // Poll every 5 seconds if socket is disconnected
+        setInterval(() => {
+            if (!this.socket || !this.socket.connected) {
+                console.log('Socket disconnected, polling for updates...');
+                this.loadBookings();
+            }
+        }, 5000);
     }
 
     renderBookingsTable() {

@@ -30,13 +30,29 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
+// Make io available to routes
+app.set('io', io);
+
 const PORT = process.env.PORT || config.server.port || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('.'));
-// Serve static files from public directory
+
+// Set static folder to repo/frontend
+const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
+app.use(express.static(FRONTEND_PATH));
+
+// Explicit HTML routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
+});
+
+app.get('/admin.html', (req, res) => {
+    res.sendFile(path.join(FRONTEND_PATH, 'admin.html'));
+});
+
+// Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure tickets directory exists
@@ -177,6 +193,17 @@ io.on('connection', (socket) => {
         console.log('📡 Sending initial seat data to new client:', socket.id);
         emitSeatUpdate();
     }, 100);
+    
+    // Handle seat data requests
+    socket.on('requestSeatData', async () => {
+        try {
+            const res = await db.query('SELECT * FROM bookings ORDER BY created_at DESC');
+            socket.emit('seatData', res.rows);
+        } catch (error) {
+            console.error('Error fetching seat data:', error);
+            socket.emit('seatData', []);
+        }
+    });
     
     socket.on('disconnect', (reason) => {
         console.log('❌ Client disconnected:', socket.id, 'Reason:', reason);
@@ -965,34 +992,26 @@ app.post('/api/create-booking', async (req, res) => {
         });
         
         // Check if seat is already booked (only check for confirmed bookings)
-        const existingBookings = await db.getSeatStatuses();
-        const existingBooking = existingBookings.find(b => 
-            b.table_number == bookingData.table && b.seat_number == bookingData.seat && 
-            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'prebooked')
+        const existingBookings = await db.query(
+            'SELECT * FROM bookings WHERE seat = $1 AND status IN ($2, $3, $4)',
+            [`${bookingData.table}-${bookingData.seat}`, 'paid', 'confirmed', 'prebooked']
         );
         
-        if (existingBooking) {
+        if (existingBookings.rows.length > 0) {
             return res.status(400).json({ error: 'Seat already booked' });
         }
         
         // Create or update user
-        await db.createOrUpdateUser(
-            bookingData.phone,
-            bookingData.firstName,
-            bookingData.lastName,
-            bookingData.email
+        await db.query(
+            'INSERT INTO users (phone, role) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
+            [bookingData.phone, 'user']
         );
         
         // Save booking to database
-        await db.createBooking({
-            bookingId: bookingId,
-            userPhone: bookingData.phone,
-            firstName: bookingData.firstName,
-            lastName: bookingData.lastName,
-            tableNumber: bookingData.table,
-            seatNumber: bookingData.seat,
-            status: 'pending'
-        });
+        const result = await db.query(
+            'INSERT INTO bookings (user_phone, event_id, seat, status) VALUES ($1, $2, $3, $4) RETURNING *',
+            [bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, 'reserved']
+        );
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1217,22 +1236,18 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 // Get bookings
 app.get('/api/bookings', async (req, res) => {
     try {
-        const bookings = await db.getAllBookings();
+        const result = await db.query('SELECT * FROM bookings ORDER BY created_at DESC');
+        const bookings = result.rows;
         
         // Convert to the format expected by frontend
         const formattedBookings = {};
         bookings.forEach(booking => {
-            formattedBookings[booking.booking_id] = {
-                id: booking.booking_id,
-                firstName: booking.first_name,
-                lastName: booking.last_name,
+            formattedBookings[booking.id] = {
+                id: booking.id,
                 phone: booking.user_phone,
-                email: booking.email,
-                table: booking.table_number,
-                seat: booking.seat_number,
+                seat: booking.seat,
                 status: booking.status,
-                bookingDate: booking.booking_date,
-                paymentDate: booking.payment_date
+                created_at: booking.created_at
             };
         });
         
