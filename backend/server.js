@@ -113,6 +113,7 @@ async function initializeApp() {
         await pool.query(`
             CREATE TABLE IF NOT EXISTS bookings (
                 id SERIAL PRIMARY KEY,
+                booking_string_id VARCHAR(50) UNIQUE,
                 user_phone VARCHAR(20) NOT NULL,
                 event_id INT NOT NULL,
                 seat VARCHAR(50) NOT NULL,
@@ -1171,6 +1172,9 @@ app.post('/api/confirm-payment', async (req, res) => {
         
         // For now, skip complex ticket generation and just update the database
         console.log('✅ Payment confirmed for booking:', bookingId);
+        
+        // Define ticketFileName for response
+        const ticketFileName = `${ticketId}.pdf`;
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
