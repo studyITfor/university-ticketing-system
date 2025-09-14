@@ -587,12 +587,24 @@ class AdminPanel {
         document.getElementById('adminPassword').value = '';
     }
 
-    loadBookings() {
-        const saved = localStorage.getItem('zolotayaSeredinaBookings');
-        this.bookings = saved ? JSON.parse(saved) : {};
-        this.renderBookingsTable();
-        this.renderPrebookedTable();
-        this.updatePrebookedStats();
+    async loadBookings() {
+        try {
+            const response = await fetch('/api/bookings');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            this.bookings = await response.json();
+            this.renderBookingsTable();
+            this.renderPrebookedTable();
+            this.updatePrebookedStats();
+        } catch (error) {
+            console.error('Error loading bookings:', error);
+            // Fallback to empty object if server is unavailable
+            this.bookings = {};
+            this.renderBookingsTable();
+            this.renderPrebookedTable();
+            this.updatePrebookedStats();
+        }
     }
 
     renderBookingsTable() {

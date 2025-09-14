@@ -12,6 +12,7 @@ const { Blob } = require('buffer');
 const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
+const db = require('./database');
 
 const app = express();
 const server = createServer(app);
@@ -53,8 +54,19 @@ const secureTicketSystem = new SecureTicketSystem(
     path.join(__dirname, 'secure-tickets-database.json')
 );
 
+// Initialize database
+async function initializeApp() {
+    try {
+        await db.initializeDatabase();
+        console.log('✅ Database initialized successfully');
+    } catch (error) {
+        console.error('❌ Database initialization failed:', error);
+        process.exit(1);
+    }
+}
+
 // Function to emit seat updates to all connected clients
-function emitSeatUpdate() {
+async function emitSeatUpdate() {
     try {
         // Get current seat statuses
         const seatStatuses = {};
@@ -67,21 +79,16 @@ function emitSeatUpdate() {
             }
         }
         
-        // Load bookings and update seat statuses
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
+        // Load bookings from database and update seat statuses
+        const bookings = await db.getSeatStatuses();
         
         // Update seat statuses based on bookings
-        Object.values(bookings).forEach(booking => {
-            if (booking.table && booking.seat && booking.status) {
-                const seatId = `${booking.table}-${booking.seat}`;
+        bookings.forEach(booking => {
+            if (booking.table_number && booking.seat_number && booking.status) {
+                const seatId = `${booking.table_number}-${booking.seat_number}`;
                 let status = 'active'; // default
                 
-                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
+                if (booking.status === 'paid' || booking.status === 'confirmed') {
                     status = 'reserved';
                 } else if (booking.status === 'pending') {
                     status = 'pending';
@@ -957,27 +964,35 @@ app.post('/api/create-booking', async (req, res) => {
             status: bookingData.status
         });
         
-        // Load existing bookings
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
         // Check if seat is already booked (only check for confirmed bookings)
-        const existingBooking = Object.values(bookings).find(b => 
-            b.table == bookingData.table && b.seat == bookingData.seat && 
-            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'paid_ru' || b.status === 'prebooked')
+        const existingBookings = await db.getSeatStatuses();
+        const existingBooking = existingBookings.find(b => 
+            b.table_number == bookingData.table && b.seat_number == bookingData.seat && 
+            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'prebooked')
         );
         
         if (existingBooking) {
             return res.status(400).json({ error: 'Seat already booked' });
         }
         
-        // Save booking
-        bookings[bookingId] = bookingData;
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        // Create or update user
+        await db.createOrUpdateUser(
+            bookingData.phone,
+            bookingData.firstName,
+            bookingData.lastName,
+            bookingData.email
+        );
+        
+        // Save booking to database
+        await db.createBooking({
+            bookingId: bookingId,
+            userPhone: bookingData.phone,
+            firstName: bookingData.firstName,
+            lastName: bookingData.lastName,
+            tableNumber: bookingData.table,
+            seatNumber: bookingData.seat,
+            status: 'pending'
+        });
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1200,16 +1215,28 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 });
 
 // Get bookings
-app.get('/api/bookings', (req, res) => {
+app.get('/api/bookings', async (req, res) => {
     try {
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
+        const bookings = await db.getAllBookings();
         
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
+        // Convert to the format expected by frontend
+        const formattedBookings = {};
+        bookings.forEach(booking => {
+            formattedBookings[booking.booking_id] = {
+                id: booking.booking_id,
+                firstName: booking.first_name,
+                lastName: booking.last_name,
+                phone: booking.user_phone,
+                email: booking.email,
+                table: booking.table_number,
+                seat: booking.seat_number,
+                status: booking.status,
+                bookingDate: booking.booking_date,
+                paymentDate: booking.payment_date
+            };
+        });
         
-        res.json(bookings);
+        res.json(formattedBookings);
     } catch (error) {
         console.error('Error loading bookings:', error);
         res.status(500).json({ error: 'Ошибка при загрузке бронирований' });
@@ -1272,11 +1299,10 @@ app.get('/tickets/:filename', (req, res) => {
 // ===== HEALTHCHECK ENDPOINTS =====
 
 // Basic healthcheck
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
     try {
-        // Check database connectivity (bookings file)
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        const dbHealthy = fs.existsSync(bookingsPath);
+        // Check database connectivity
+        const dbHealthy = await db.checkDatabaseHealth();
         
         // Check secure ticket system
         const secureTicketsPath = path.join(__dirname, 'secure-tickets-database.json');
@@ -2022,41 +2048,58 @@ app.get('/api/test/socket-info', (req, res) => {
 module.exports = app;
 
 // Start server with error handling
-server.listen(PORT, '0.0.0.0', (err) => {
-        if (err) {
-            console.error('❌ Failed to start server:', err);
-            if (err.code === 'EADDRINUSE') {
-                console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
-                console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
-                console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
-            }
-            process.exit(1);
-        }
+async function startServer() {
+    try {
+        // Initialize database first
+        await initializeApp();
         
-        console.log('🚀 Server started successfully!');
-        console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
-        console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
-        console.log('📱 Admin panel: http://localhost:3000/admin.html');
-        console.log('🎓 Student portal: http://localhost:3000/index.html');
-        console.log('🧪 Test page: http://localhost:3000/socket-test.html');
-        console.log('');
-        console.log('🔐 API Endpoints:');
-        console.log('  POST /api/create-booking - Create new booking');
-        console.log('  POST /api/confirm-payment - Confirm payment');
-        console.log('  DELETE /api/delete-booking/:id - Delete booking');
-        console.log('  GET  /api/seat-statuses - Get seat statuses');
-        console.log('  POST /api/test/emit-seat-update - Test seat update');
-        console.log('  GET  /api/test/socket-info - Socket.IO info');
-        console.log('');
-        console.log('🔌 Socket.IO Events:');
-        console.log('  seatUpdate - Real-time seat status updates');
-        console.log('  connected - Connection confirmation');
-        console.log('  test - Test event');
-        console.log('  requestSeatData - Request current seat data');
-        console.log('  ping/pong - Connection health check');
-        console.log('');
-        console.log('🎯 Ready for real-time seat booking!');
-    });
+        // Start the server
+        server.listen(PORT, '0.0.0.0', (err) => {
+            if (err) {
+                console.error('❌ Failed to start server:', err);
+                if (err.code === 'EADDRINUSE') {
+                    console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
+                    console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
+                    console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
+                }
+                process.exit(1);
+            }
+            
+            console.log('🚀 Server started successfully!');
+            console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
+            console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
+            console.log('📱 Admin panel: http://localhost:3000/admin.html');
+            console.log('🎓 Student portal: http://localhost:3000/index.html');
+            console.log('🧪 Test page: http://localhost:3000/socket-test.html');
+            console.log('');
+            console.log('🔐 API Endpoints:');
+            console.log('  POST /api/create-booking - Create new booking');
+            console.log('  POST /api/confirm-payment - Confirm payment');
+            console.log('  DELETE /api/delete-booking/:id - Delete booking');
+            console.log('  GET  /api/seat-statuses - Get seat statuses');
+            console.log('  POST /api/test/emit-seat-update - Test seat update');
+            console.log('  GET  /api/test/socket-info - Socket.IO info');
+            console.log('');
+            console.log('🔌 Socket.IO Events:');
+            console.log('  seatUpdate - Real-time seat status updates');
+            console.log('  connected - Connection confirmation');
+            console.log('  test - Test event');
+            console.log('  requestSeatData - Request current seat data');
+            console.log('  ping/pong - Connection health check');
+            console.log('');
+            console.log('🎯 Ready for real-time seat booking!');
+            
+            // Emit initial seat update
+            emitSeatUpdate();
+        });
+    } catch (error) {
+        console.error('❌ Failed to initialize application:', error);
+        process.exit(1);
+    }
+}
+
+// Start the application
+startServer();
 
 // Handle server errors
 server.on('error', (err) => {
