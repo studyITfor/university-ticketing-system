@@ -116,7 +116,14 @@ async function initializeApp() {
                 user_phone VARCHAR(20) NOT NULL,
                 event_id INT NOT NULL,
                 seat VARCHAR(50) NOT NULL,
+                table_number INT,
+                seat_number INT,
+                first_name VARCHAR(100),
+                last_name VARCHAR(100),
                 status VARCHAR(20) DEFAULT 'reserved',
+                payment_date TIMESTAMP,
+                payment_confirmed_by VARCHAR(50),
+                ticket_id VARCHAR(50),
                 created_at TIMESTAMP DEFAULT now(),
                 updated_at TIMESTAMP DEFAULT now()
             );
@@ -1080,8 +1087,8 @@ app.post('/api/create-booking', async (req, res) => {
         
         // Save booking to database
         const result = await db.query(
-            'INSERT INTO bookings (user_phone, event_id, seat, status) VALUES ($1, $2, $3, $4) RETURNING *',
-            [bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, 'reserved']
+            'INSERT INTO bookings (user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+            [bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 'reserved']
         );
         
         // Emit booking created event to all admins
@@ -1131,40 +1138,45 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { bookingId } = req.body;
         
-        // Load bookings from localStorage (in a real app, this would be a database)
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
+        // Get booking from database
+        const bookingResult = await db.query(
+            'SELECT b.*, u.phone FROM bookings b JOIN users u ON b.user_phone = u.phone WHERE b.id = $1',
+            [bookingId]
+        );
         
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        const booking = bookings[bookingId];
-        if (!booking) {
+        if (bookingResult.rows.length === 0) {
             return res.status(404).json({ error: 'Бронирование не найдено' });
         }
         
-        // Update booking status
-        booking.status = 'Оплачен';
-        booking.paymentDate = new Date().toISOString();
-        booking.paymentConfirmedBy = 'admin';
+        const booking = bookingResult.rows[0];
         
         // Generate unique ticket ID
         const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
-        booking.ticketId = ticketId;
+        
+        // Update booking status in database
+        await db.query(
+            'UPDATE bookings SET status = $1, payment_date = $2, payment_confirmed_by = $3, ticket_id = $4, updated_at = now() WHERE id = $5',
+            ['paid', new Date().toISOString(), 'admin', ticketId, bookingId]
+        );
+        
+        // Update local booking object for ticket generation
+        booking.status = 'paid';
+        booking.payment_date = new Date().toISOString();
+        booking.payment_confirmed_by = 'admin';
+        booking.ticket_id = ticketId;
         
         // Generate QR code data
         const qrData = {
             ticketId: ticketId,
             bookingId: booking.id,
-            seatId: `${booking.table}-${booking.seat}`,
+            seatId: `${booking.table_number}-${booking.seat_number}`,
             event: 'GOLDENMIDDLE',
             organization: 'КГМА',
             date: '2025-10-26',
             time: '18:00',
             venue: 'Асман',
-            name: `${booking.firstName} ${booking.lastName}`,
-            seat: `Стол ${booking.table}, Место ${booking.seat}`,
+            name: `${booking.first_name} ${booking.last_name}`,
+            seat: `Стол ${booking.table_number}, Место ${booking.seat_number}`,
             timestamp: Date.now()
         };
         
@@ -1180,11 +1192,7 @@ app.post('/api/confirm-payment', async (req, res) => {
         fs.writeFileSync(ticketPath, pdfBuffer);
         
         // Send WhatsApp ticket
-        await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, booking);
-        
-        // Update bookings
-        bookings[bookingId] = booking;
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        await sendWhatsAppTicket(booking.user_phone, pdfBuffer, ticketId, booking);
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1194,18 +1202,18 @@ app.post('/api/confirm-payment', async (req, res) => {
             type: 'payment-confirmed',
             data: {
                 bookingId: bookingId,
-                table: booking.table,
-                seat: booking.seat,
+                table: booking.table_number,
+                seat: booking.seat_number,
                 status: booking.status,
-                firstName: booking.firstName,
-                lastName: booking.lastName,
+                firstName: booking.first_name,
+                lastName: booking.last_name,
                 ticketId: ticketId
             },
             timestamp: Date.now()
         });
         
         // Emit individual seat status update
-        const seatId = `${booking.table}-${booking.seat}`;
+        const seatId = `${booking.table_number}-${booking.seat_number}`;
         io.emit('update-seat-status', {
             seatId: seatId,
             status: 'booked',
@@ -1235,22 +1243,21 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
         
-        // Load bookings
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
+        // Get booking from database
+        const bookingResult = await db.query(
+            'SELECT * FROM bookings WHERE id = $1',
+            [bookingId]
+        );
         
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        const booking = bookings[bookingId];
-        if (!booking) {
+        if (bookingResult.rows.length === 0) {
             return res.status(404).json({ error: 'Booking not found' });
         }
         
+        const booking = bookingResult.rows[0];
+        
         // Delete ticket file if exists
-        if (booking.ticketId) {
-            const ticketPath = path.join(ticketsDir, `${booking.ticketId}.pdf`);
+        if (booking.ticket_id) {
+            const ticketPath = path.join(ticketsDir, `${booking.ticket_id}.pdf`);
             if (fs.existsSync(ticketPath)) {
                 fs.unlinkSync(ticketPath);
             }
@@ -1259,9 +1266,8 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         // Store booking data before deletion for event emission
         const deletedBooking = { ...booking };
         
-        // Remove booking
-        delete bookings[bookingId];
-        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        // Remove booking from database
+        await db.query('DELETE FROM bookings WHERE id = $1', [bookingId]);
         
         // Emit booking deleted event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1271,17 +1277,17 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             type: 'booking-deleted',
             data: {
                 bookingId: bookingId,
-                table: deletedBooking.table,
-                seat: deletedBooking.seat,
+                table: deletedBooking.table_number,
+                seat: deletedBooking.seat_number,
                 status: 'available',
-                firstName: deletedBooking.firstName,
-                lastName: deletedBooking.lastName
+                firstName: deletedBooking.first_name,
+                lastName: deletedBooking.last_name
             },
             timestamp: Date.now()
         });
         
         // Emit individual seat status update
-        const seatId = `${deletedBooking.table}-${deletedBooking.seat}`;
+        const seatId = `${deletedBooking.table_number}-${deletedBooking.seat_number}`;
         io.emit('update-seat-status', {
             seatId: seatId,
             status: 'available',

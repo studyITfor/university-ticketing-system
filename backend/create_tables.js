@@ -17,7 +17,14 @@ async function create() {
       user_phone VARCHAR(20) NOT NULL,
       event_id INT NOT NULL,
       seat VARCHAR(50) NOT NULL,
+      table_number INT,
+      seat_number INT,
+      first_name VARCHAR(100),
+      last_name VARCHAR(100),
       status VARCHAR(20) DEFAULT 'reserved',
+      payment_date TIMESTAMP,
+      payment_confirmed_by VARCHAR(50),
+      ticket_id VARCHAR(50),
       created_at TIMESTAMP DEFAULT now(),
       updated_at TIMESTAMP DEFAULT now()
     );
