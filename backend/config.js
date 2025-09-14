@@ -12,11 +12,6 @@ module.exports = {
         port: process.env.PORT || 3000
     },
 
-    // Deletion Configuration
-    deletion: {
-        allowPaidDeletion: process.env.ALLOW_PAID_DELETION === 'true' || false
-    },
-
     // Event Information
     event: {
         name: 'GOLDENMIDDLE',
@@ -24,6 +19,6 @@ module.exports = {
         date: '26 октября 2025',
         time: '18:00',
         venue: 'Асман',
-        price: 5500
+        price: 5900
     }
 };

@@ -587,27 +587,12 @@ class AdminPanel {
         document.getElementById('adminPassword').value = '';
     }
 
-    async loadBookings() {
-        try {
-            console.log('🔄 Loading bookings from server...');
-            const response = await fetch('/api/bookings');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            this.bookings = await response.json();
-            console.log('✅ Bookings loaded from server:', Object.keys(this.bookings).length);
-            this.renderBookingsTable();
-            this.renderPrebookedTable();
-            this.updatePrebookedStats();
-        } catch (error) {
-            console.error('❌ Error loading bookings from server:', error);
-            // Fallback to localStorage if server fails
-            const saved = localStorage.getItem('zolotayaSeredinaBookings');
-            this.bookings = saved ? JSON.parse(saved) : {};
-            this.renderBookingsTable();
-            this.renderPrebookedTable();
-            this.updatePrebookedStats();
-        }
+    loadBookings() {
+        const saved = localStorage.getItem('zolotayaSeredinaBookings');
+        this.bookings = saved ? JSON.parse(saved) : {};
+        this.renderBookingsTable();
+        this.renderPrebookedTable();
+        this.updatePrebookedStats();
     }
 
     renderBookingsTable() {
@@ -623,6 +608,7 @@ class AdminPanel {
                 <td>${booking.id}</td>
                 <td>${booking.firstName} ${booking.lastName}</td>
                 <td>${booking.phone}</td>
+                <td>${booking.email}</td>
                 <td>Стол ${booking.table}, Место ${booking.seat}</td>
                 <td><span class="status-badge status-${booking.status}">${this.getStatusText(booking.status)}</span></td>
                 <td>${new Date(booking.bookingDate).toLocaleDateString('ru-RU')}</td>
@@ -638,16 +624,9 @@ class AdminPanel {
                                 <i class="fas fa-ticket-alt"></i> Билет
                             </button>
                         ` : ''}
-                        <button class="btn btn-danger" 
-                                onclick="adminPanel.deleteBooking('${booking.id}')"
-                                title="${booking.status === 'paid' ? 'Удалить оплаченное бронирование (только для администраторов)' : 'Удалить бронирование'}">
+                        <button class="btn btn-danger" onclick="adminPanel.deleteBooking('${booking.id}')">
                             <i class="fas fa-trash"></i> Удалить
                         </button>
-                        ${booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен' ? `
-                            <button class="btn btn-warning" onclick="adminPanel.forceReleaseBooking('${booking.id}')" title="Принудительно освободить место (только для администраторов)">
-                                <i class="fas fa-unlock"></i> Освободить
-                            </button>
-                        ` : ''}
                     </div>
                 </td>
             `;
@@ -664,7 +643,7 @@ class AdminPanel {
                 booking.firstName.toLowerCase().includes(searchTerm) ||
                 booking.lastName.toLowerCase().includes(searchTerm) ||
                 booking.phone.includes(searchTerm) ||
-                false; // Email field removed
+                booking.email.toLowerCase().includes(searchTerm);
 
             const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
 
@@ -703,6 +682,10 @@ class AdminPanel {
                 <span class="value">${this.currentBooking.phone}</span>
             </div>
             <div class="detail-row">
+                <span class="label">Email:</span>
+                <span class="value">${this.currentBooking.email}</span>
+            </div>
+            <div class="detail-row">
                 <span class="label">Место:</span>
                 <span class="value">Стол ${this.currentBooking.table}, Место ${this.currentBooking.seat}</span>
             </div>
@@ -723,7 +706,7 @@ class AdminPanel {
         if (!this.bookings[bookingId]) return;
 
         const booking = this.bookings[bookingId];
-        if (confirm(`Подтвердить оплату для ${booking.firstName} ${booking.lastName} (Стол ${booking.table}, Место ${booking.seat})?\n\nЭто действие сгенерирует и отправит билет студенту в WhatsApp.`)) {
+        if (confirm(`Confirm Payment для ${booking.firstName} ${booking.lastName} (Table ${booking.table}, Seat ${booking.seat})?\n\nЭто действие сгенерирует и отправит билет студенту в WhatsApp.`)) {
             try {
                 // Show loading state
                 const confirmButton = document.querySelector(`button[onclick="adminPanel.confirmPayment('${bookingId}')"]`);
@@ -745,7 +728,7 @@ class AdminPanel {
 
                 if (result.success) {
                     // Update local booking data
-                    booking.status = 'Оплачен';
+                    booking.status = 'Paid';
                     booking.paymentDate = new Date().toISOString();
                     booking.paymentConfirmedBy = 'admin';
                     booking.ticketId = result.ticketId;
@@ -758,30 +741,8 @@ class AdminPanel {
                     this.updateStatistics();
                     this.generateHallPreview();
                     
-                    // Show enhanced success message with WhatsApp delivery status
-                    let successMessage = `✅ Оплата подтверждена для ${booking.firstName} ${booking.lastName}!\n\n`;
-                    successMessage += `🎫 ID билета: ${result.ticketId}\n`;
-                    successMessage += `📱 WhatsApp: ${booking.phone}\n\n`;
-                    
-                    if (result.whatsappDelivery && result.whatsappDelivery.success) {
-                        successMessage += `✅ Билет успешно отправлен в WhatsApp!\n`;
-                        successMessage += `📊 Попыток: ${result.whatsappDelivery.attempts}\n`;
-                        successMessage += `⏱️ Время отправки: ${result.whatsappDelivery.duration}ms\n`;
-                        if (result.whatsappDelivery.messageId) {
-                            successMessage += `📨 ID сообщения: ${result.whatsappDelivery.messageId}\n`;
-                        }
-                    } else {
-                        successMessage += `⚠️ Билет НЕ удалось отправить в WhatsApp!\n`;
-                        if (result.whatsappDelivery) {
-                            successMessage += `📊 Попыток: ${result.whatsappDelivery.attempts}\n`;
-                            successMessage += `❌ Последняя ошибка: ${result.whatsappDelivery.lastError}\n`;
-                        }
-                        successMessage += `\n💡 Билет сохранен локально, но студент не получит его автоматически.`;
-                    }
-                    
-                    successMessage += `\n\nМесто Стол ${booking.table}, Место ${booking.seat} теперь забронировано.`;
-                    
-                    alert(successMessage);
+                    // Show success message
+                    alert(`✅ Оплата подтверждена для ${booking.firstName} ${booking.lastName}!\n\n📱 Ticket отправлен в WhatsApp: ${booking.phone}\n🎫 ID билета: ${result.ticketId}\n\nSeat Table ${booking.table}, Seat ${booking.seat} теперь забронировано.`);
                 } else {
                     throw new Error(result.error || 'Ошибка при подтверждении оплаты');
                 }
@@ -793,7 +754,7 @@ class AdminPanel {
                 const confirmButton = document.querySelector(`button[onclick="adminPanel.confirmPayment('${bookingId}')"]`);
                 if (confirmButton) {
                     confirmButton.disabled = false;
-                    confirmButton.innerHTML = '<i class="fas fa-check"></i> Подтвердить оплату';
+                    confirmButton.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
                 }
             }
         }
@@ -825,7 +786,7 @@ class AdminPanel {
         document.getElementById('ticketName').textContent = 
             `${this.currentBooking.firstName} ${this.currentBooking.lastName}`;
         document.getElementById('ticketSeat').textContent = 
-            `Стол ${this.currentBooking.table}, Место ${this.currentBooking.seat}`;
+            `Table ${this.currentBooking.table}, Seat ${this.currentBooking.seat}`;
         document.getElementById('ticketId').textContent = ticketId;
 
         // Generate QR code
@@ -860,9 +821,9 @@ class AdminPanel {
     sendTicket() {
         if (!this.currentBooking) return;
 
-        // In a real application, this would send the ticket
+        // In a real application, this would send an email
         // For demo purposes, we'll just show a success message
-        alert(`Билет отправлен успешно!`);
+        alert(`Ticket отправлен на email: ${this.currentBooking.email}`);
         
         // Mark ticket as sent
         this.currentBooking.ticketSent = true;
@@ -879,7 +840,7 @@ class AdminPanel {
         const ticketData = {
             event: 'Университетское мероприятие "Золотая середина"',
             name: `${this.currentBooking.firstName} ${this.currentBooking.lastName}`,
-            seat: `Стол ${this.currentBooking.table}, Место ${this.currentBooking.seat}`,
+            seat: `Table ${this.currentBooking.table}, Seat ${this.currentBooking.seat}`,
             date: '5 октября 2025',
             time: '19:00',
             venue: 'Университетский зал',
@@ -900,46 +861,10 @@ class AdminPanel {
     }
 
     async deleteBooking(bookingId) {
-        if (!this.bookings[bookingId]) {
-            alert('❌ Бронирование не найдено в локальных данных');
-            return;
-        }
+        if (!this.bookings[bookingId]) return;
         
         const booking = this.bookings[bookingId];
-        
-        // Note: Admin can delete any booking, including paid ones
-        // The backend will handle the authorization check
-        
-        // Enhanced confirmation modal with backup info
-        const isPaid = booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен';
-        const isAdmin = localStorage.getItem('userRole') === 'admin';
-        
-        let confirmMessage = `Удалить бронирование для ${booking.firstName} ${booking.lastName}?\n\n`;
-        confirmMessage += `📋 Детали бронирования:\n`;
-        confirmMessage += `• Стол: ${booking.table}, Место: ${booking.seat}\n`;
-        confirmMessage += `• Статус: ${booking.status}\n`;
-        confirmMessage += `• ID билета: ${booking.id}\n`;
-        confirmMessage += `• Телефон: ${booking.phone}\n\n`;
-        
-        if (isPaid) {
-            confirmMessage += `⚠️ ВНИМАНИЕ: Это оплаченное бронирование!\n`;
-            confirmMessage += `• Деньги уже получены\n`;
-            confirmMessage += `• Билет отправлен клиенту\n`;
-            confirmMessage += `• Удаление необратимо\n\n`;
-        }
-        
-        confirmMessage += `Это действие:\n`;
-        confirmMessage += `• Освободит место для повторного бронирования\n`;
-        confirmMessage += `• Удалит билет из системы\n`;
-        confirmMessage += `• Запишет операцию в журнал аудита\n\n`;
-        
-        if (isAdmin) {
-            confirmMessage += `🔐 Администратор: Операция будет залогирована с вашим IP\n`;
-        }
-        
-        confirmMessage += `Вы уверены, что хотите продолжить?`;
-        
-        if (confirm(confirmMessage)) {
+        if (confirm(`Delete бронирование для ${booking.firstName} ${booking.lastName} (Table ${booking.table}, Seat ${booking.seat})?\n\nЭто действие освободит место и его можно будет забронировать заново.`)) {
             try {
                 // Show loading state
                 const deleteButton = document.querySelector(`button[onclick="adminPanel.deleteBooking('${bookingId}')"]`);
@@ -948,7 +873,7 @@ class AdminPanel {
                     deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Удаление...';
                 }
 
-                // Call backend API to delete booking
+                // Call backend API
                 const response = await fetch(`/api/delete-booking/${bookingId}`, {
                     method: 'DELETE'
                 });
@@ -957,105 +882,9 @@ class AdminPanel {
 
                 if (result.success) {
                     // Store booking details for confirmation message
-                    const seatInfo = `Стол ${booking.table}, Место ${booking.seat}`;
+                    const seatInfo = `Table ${booking.table}, Seat ${booking.seat}`;
                     const customerName = `${booking.firstName} ${booking.lastName}`;
-                    const wasPaid = result.deletedBooking?.wasPaid || isPaid;
-
-                    // Remove the booking from local data
-                    delete this.bookings[bookingId];
-                    this.saveBookings();
                     
-                    // Update UI
-                    this.renderBookingsTable();
-                    this.updateStatistics();
-                    this.generateHallPreview();
-                    
-                    // Show enhanced confirmation message
-                    let successMessage = `✅ Бронирование успешно удалено!\n\n`;
-                    successMessage += `📋 Детали удаления:\n`;
-                    successMessage += `• Клиент: ${customerName}\n`;
-                    successMessage += `• Место: ${seatInfo}\n`;
-                    successMessage += `• ID билета: ${booking.id}\n`;
-                    successMessage += `• Статус: ${wasPaid ? 'Оплаченное' : 'Неоплаченное'}\n\n`;
-                    successMessage += `🔄 Результат:\n`;
-                    successMessage += `• Место освобождено и доступно для бронирования\n`;
-                    successMessage += `• Билет удален из системы\n`;
-                    successMessage += `• Операция залогирована в журнале аудита\n\n`;
-                    successMessage += `📊 Обновление интерфейса...`;
-                    
-                    alert(successMessage);
-                } else {
-                    // Handle specific error cases
-                    if (result.error === 'Booking not found') {
-                        alert('❌ Бронирование уже удалено или не найдено');
-                        // Remove from local data if it exists
-                        delete this.bookings[bookingId];
-                        this.saveBookings();
-                        this.renderBookingsTable();
-                        this.updateStatistics();
-                        this.generateHallPreview();
-                    } else if (result.error === 'Cannot delete paid booking') {
-                        alert('❌ Нельзя удалить оплаченное бронирование!\n\nОплаченные бронирования можно только отменить через специальную процедуру.');
-                    } else {
-                        throw new Error(result.message || result.error || 'Ошибка при удалении бронирования');
-                    }
-                }
-            } catch (error) {
-                console.error('Error deleting booking:', error);
-                alert(`❌ Ошибка при удалении бронирования: ${error.message}`);
-            } finally {
-                // Reset button state
-                const deleteButton = document.querySelector(`button[onclick="adminPanel.deleteBooking('${bookingId}')"]`);
-                if (deleteButton) {
-                    deleteButton.disabled = false;
-                    deleteButton.innerHTML = '<i class="fas fa-trash"></i> Удалить';
-                }
-            }
-        }
-    }
-
-    // Force release paid booking (Admin only)
-    async forceReleaseBooking(bookingId) {
-        if (!this.bookings[bookingId]) {
-            alert('❌ Бронирование не найдено в локальных данных');
-            return;
-        }
-        
-        const booking = this.bookings[bookingId];
-        
-        // Check if booking is actually paid
-        const isPaid = booking.status === 'paid' || booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен';
-        if (!isPaid) {
-            alert('❌ Можно освободить только оплаченные бронирования!');
-            return;
-        }
-        
-        if (confirm(`⚠️ ПРИНУДИТЕЛЬНО ОСВОБОДИТЬ МЕСТО\n\nКлиент: ${booking.firstName} ${booking.lastName}\nМесто: Стол ${booking.table}, Место ${booking.seat}\nСтатус: ${booking.status || booking.paymentStatus}\n\n⚠️ ВНИМАНИЕ: Это действие:\n• Освободит место для нового бронирования\n• Удалит билет клиента\n• Нельзя будет отменить\n\nПродолжить?`)) {
-            try {
-                // Show loading state
-                const releaseButton = document.querySelector(`button[onclick="adminPanel.forceReleaseBooking('${bookingId}')"]`);
-                if (releaseButton) {
-                    releaseButton.disabled = true;
-                    releaseButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Освобождение...';
-                }
-
-                // Call backend API with admin role
-                const response = await fetch(`/api/force-release-booking/${bookingId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-Role': 'admin'
-                    }
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // Store booking details for confirmation message
-                    const seatInfo = `Стол ${booking.table}, Место ${booking.seat}`;
-                    const customerName = `${booking.firstName} ${booking.lastName}`;
-                    const previousStatus = result.data.previousStatus;
-
                     // Remove the booking from local data
                     delete this.bookings[bookingId];
                     this.saveBookings();
@@ -1066,34 +895,19 @@ class AdminPanel {
                     this.generateHallPreview();
                     
                     // Show confirmation message
-                    alert(`✅ МЕСТО ПРИНУДИТЕЛЬНО ОСВОБОЖДЕНО!\n\nМесто ${seatInfo} освобождено администратором\nКлиент: ${customerName}\nПредыдущий статус: ${previousStatus}\n\nМесто теперь доступно для нового бронирования.`);
+                    alert(`✅ Бронирование удалено!\n\nSeat ${seatInfo} освобождено и доступно для нового бронирования.\n\nКлиент: ${customerName}`);
                 } else {
-                    // Handle specific error cases
-                    if (result.error === 'Booking not found') {
-                        alert('❌ Бронирование уже удалено или не найдено');
-                        // Remove from local data if it exists
-                        delete this.bookings[bookingId];
-                        this.saveBookings();
-                        this.renderBookingsTable();
-                        this.updateStatistics();
-                        this.generateHallPreview();
-                    } else if (result.error === 'Booking not paid') {
-                        alert('❌ Можно освободить только оплаченные бронирования!');
-                    } else if (result.error === 'Access denied') {
-                        alert('❌ Доступ запрещен! Только администраторы могут освобождать места.');
-                    } else {
-                        throw new Error(result.message || result.error || 'Ошибка при освобождении места');
-                    }
+                    throw new Error(result.error || 'Ошибка при удалении бронирования');
                 }
             } catch (error) {
-                console.error('Error force releasing booking:', error);
-                alert(`❌ Ошибка при освобождении места: ${error.message}`);
+                console.error('Error deleting booking:', error);
+                alert(`❌ Ошибка при удалении бронирования: ${error.message}`);
             } finally {
                 // Reset button state
-                const releaseButton = document.querySelector(`button[onclick="adminPanel.forceReleaseBooking('${bookingId}')"]`);
-                if (releaseButton) {
-                    releaseButton.disabled = false;
-                    releaseButton.innerHTML = '<i class="fas fa-unlock"></i> Освободить';
+                const deleteButton = document.querySelector(`button[onclick="adminPanel.deleteBooking('${bookingId}')"]`);
+                if (deleteButton) {
+                    deleteButton.disabled = false;
+                    deleteButton.innerHTML = '<i class="fas fa-trash"></i> Delete';
                 }
             }
         }
@@ -1311,7 +1125,7 @@ class AdminPanel {
 
         let status = 'available';
         if (booking) {
-            if (booking.status === 'paid' || booking.status === 'Оплачен') {
+            if (booking.status === 'paid' || booking.status === 'Paid') {
                 seatElement.classList.add('booked');
                 status = 'booked';
             } else if (booking.status === 'pending' || booking.status === 'awaiting confirmation') {
@@ -1404,12 +1218,12 @@ class AdminPanel {
             b.table == tableNumber && b.status !== 'cancelled'
         );
         
-        let message = `Стол ${tableNumber}:\n`;
+        let message = `Table ${tableNumber}:\n`;
         if (tableBookings.length === 0) {
             message += 'Нет бронирований';
         } else {
             tableBookings.forEach(booking => {
-                message += `Место ${booking.seat}: ${booking.firstName} ${booking.lastName} (${this.getStatusText(booking.status)})\n`;
+                message += `Seat ${booking.seat}: ${booking.firstName} ${booking.lastName} (${this.getStatusText(booking.status)})\n`;
             });
         }
         
@@ -1450,6 +1264,7 @@ class AdminPanel {
             let message = `Стол ${table}, Место ${seat}:\n`;
             message += `Имя: ${booking.firstName} ${booking.lastName}\n`;
             message += `Телефон: ${booking.phone}\n`;
+            message += `Email: ${booking.email}\n`;
             message += `Статус: ${this.getStatusText(booking.status)}\n`;
             message += `Дата бронирования: ${new Date(booking.bookingDate).toLocaleString('ru-RU')}`;
             
@@ -1483,7 +1298,7 @@ class AdminPanel {
         );
         
         if (existingBooking) {
-            alert('Место уже забронировано');
+            alert('Seat уже забронировано');
             return;
         }
         
@@ -1496,6 +1311,7 @@ class AdminPanel {
             firstName: name,
             lastName: 'Организатор',
             phone: '000-000-0000',
+            email: 'admin@event.com',
             table: tableNum,
             seat: seatNum,
             seatId: seatId,
@@ -1511,7 +1327,7 @@ class AdminPanel {
         this.updateStatistics();
         this.generateHallPreview();
         
-        alert(`Место ${seatId} забронировано организатором`);
+        alert(`Seat ${seatId} забронировано организатором`);
     }
 
     startManualRelease() {
@@ -1532,7 +1348,7 @@ class AdminPanel {
         );
         
         if (!booking) {
-            alert('Место не забронировано');
+            alert('Seat не забронировано');
             return;
         }
         
@@ -1542,7 +1358,7 @@ class AdminPanel {
             this.renderBookingsTable();
             this.updateStatistics();
             this.generateHallPreview();
-            alert('Место освобождено');
+            alert('Seat освобождено');
         }
     }
 
@@ -1734,7 +1550,7 @@ class AdminPanel {
     handlePrebookResult(result) {
         if (result.success) {
             const message = `✅ Предварительное бронирование завершено!\n\n` +
-                          `Забронировано: ${result.totalPrebooked} мест\n` +
+                          `Booked: ${result.totalPrebooked} мест\n` +
                           `Уже занято: ${result.totalAlreadyBooked} мест\n\n` +
                           `Забронированные места: ${result.prebookedSeats.join(', ')}`;
             
@@ -1927,7 +1743,7 @@ class AdminPanel {
                 console.log('📡 Seat release event sent to server');
             }
 
-            alert(`✅ Место ${seatId} освобождено`);
+            alert(`✅ Seat ${seatId} освобождено`);
             console.log(`✅ Released pre-booked seat ${seatId}`);
 
         } catch (error) {
@@ -1950,11 +1766,11 @@ class AdminPanel {
         const details = `
 Детали предварительного бронирования:
 
-Место: ${seatId}
+Seat: ${seatId}
 Тип: ${prebookType.toUpperCase()}
 Дата создания: ${date}
 ID бронирования: ${bookingId}
-Статус: ${booking.status}
+Status: ${booking.status}
 Администратор: ${booking.adminAction ? 'Да' : 'Нет'}
         `;
 
@@ -2031,7 +1847,7 @@ ID бронирования: ${bookingId}
     updateStatistics() {
         const totalBookings = Object.keys(this.bookings).length;
         const pendingBookings = Object.values(this.bookings).filter(b => b.status === 'pending').length;
-        const confirmedBookings = Object.values(this.bookings).filter(b => b.status === 'paid' || b.status === 'Оплачен').length;
+        const confirmedBookings = Object.values(this.bookings).filter(b => b.status === 'paid' || b.status === 'Paid').length;
         const availableSeats = 504 - Object.values(this.bookings).filter(b => b.status !== 'cancelled').length - this.prebookedSeats.size;
 
         document.getElementById('totalBookings').textContent = totalBookings;
@@ -2102,14 +1918,14 @@ ID бронирования: ${bookingId}
             if (data.success) {
                 this.verificationStats.verifiedToday++;
                 this.verificationStats.validTickets++;
-                this.showVerificationResult('success', 'Билет действителен', 
-                    `Билет ${ticketId} успешно проверен`, data.data);
+                this.showVerificationResult('success', 'Ticket действителен', 
+                    `Ticket ${ticketId} успешно проверен`, data.data);
                 this.updateVerificationStats();
             } else {
                 this.verificationStats.verifiedToday++;
                 this.verificationStats.invalidTickets++;
-                this.showVerificationResult('error', 'Билет недействителен', 
-                    data.message || 'Билет не найден или уже использован');
+                this.showVerificationResult('error', 'Ticket недействителен', 
+                    data.message || 'Ticket не найден или уже использован');
                 this.updateVerificationStats();
             }
         } catch (error) {
@@ -2151,9 +1967,9 @@ ID бронирования: ${bookingId}
             detailsDiv.innerHTML = `
                 <strong>Детали билета:</strong><br>
                 Держатель: ${details.holderName || 'Не указано'}<br>
-                Стол: ${details.table || 'Не указано'}<br>
-                Место: ${details.seat || 'Не указано'}<br>
-                Статус: ${this.getStatusText(details.status)}<br>
+                Table: ${details.table || 'Не указано'}<br>
+                Seat: ${details.seat || 'Не указано'}<br>
+                Status: ${this.getStatusText(details.status)}<br>
                 Создан: ${details.createdAt ? new Date(details.createdAt).toLocaleString('ru-RU') : 'Не указано'}
             `;
             detailsDiv.style.display = 'block';
@@ -2176,7 +1992,7 @@ ID бронирования: ${bookingId}
         const statusMap = {
             'active': 'Активный',
             'pending': 'Ожидает подтверждения',
-            'reserved': 'Забронировано',
+            'reserved': 'Booked',
             'used': 'Использован'
         };
         return statusMap[status] || status;
@@ -2226,8 +2042,8 @@ ID бронирования: ${bookingId}
             const data = await response.json();
 
             if (data.success) {
-                this.showVerificationResult('success', 'Билет добавлен', 
-                    `Билет ${ticketData.ticketId} успешно добавлен в систему`, data.data);
+                this.showVerificationResult('success', 'Ticket добавлен', 
+                    `Ticket ${ticketData.ticketId} успешно добавлен в систему`, data.data);
                 form.reset();
                 this.hideModal('addTicketModal');
                 this.refreshVerificationStats();
@@ -2312,13 +2128,13 @@ ID бронирования: ${bookingId}
                 
                 if (data.type === 'booking-created') {
                     console.log('📡 New booking created by another admin:', data.data);
-                    this.showNotification(`Новое бронирование: ${data.data.firstName} ${data.data.lastName} - Стол ${data.data.table}, Место ${data.data.seat}`, 'info');
+                    this.showNotification(`Новое бронирование: ${data.data.firstName} ${data.data.lastName} - Table ${data.data.table}, Seat ${data.data.seat}`, 'info');
                 } else if (data.type === 'payment-confirmed') {
                     console.log('📡 Payment confirmed by another admin:', data.data);
-                    this.showNotification(`Оплата подтверждена: ${data.data.firstName} ${data.data.lastName} - Билет ${data.data.ticketId}`, 'success');
+                    this.showNotification(`Оплата подтверждена: ${data.data.firstName} ${data.data.lastName} - Ticket ${data.data.ticketId}`, 'success');
                 } else if (data.type === 'booking-deleted') {
                     console.log('📡 Booking deleted by another admin:', data.data);
-                    this.showNotification(`Бронирование удалено: ${data.data.firstName} ${data.data.lastName} - Стол ${data.data.table}, Место ${data.data.seat}`, 'warning');
+                    this.showNotification(`Бронирование удалено: ${data.data.firstName} ${data.data.lastName} - Table ${data.data.table}, Seat ${data.data.seat}`, 'warning');
                 }
                 
                 // Update individual seat status if provided
@@ -2502,8 +2318,5 @@ ID бронирования: ${bookingId}
 // Initialize admin panel
 let adminPanel;
 document.addEventListener('DOMContentLoaded', () => {
-    // Set admin role for this session
-    localStorage.setItem('userRole', 'admin');
-    
     adminPanel = new AdminPanel();
 });

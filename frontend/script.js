@@ -303,11 +303,13 @@ class StudentTicketingSystem {
         const firstNameInput = document.getElementById('firstName');
         const lastNameInput = document.getElementById('lastName');
         const phoneInput = document.getElementById('phone');
+        // Email input removed - phone-only authentication
         
         console.log('🔍 DEBUG: Input elements:');
         console.log('  firstName:', firstNameInput?.value);
         console.log('  lastName:', lastNameInput?.value);
         console.log('  phone:', phoneInput?.value);
+        // Email removed - phone-only authentication
         
         const formData = new FormData(form);
         
@@ -321,6 +323,7 @@ class StudentTicketingSystem {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
             phone: formData.get('phone'),
+            // email removed - phone-only authentication
             seatId: this.currentBookingSeat,
             table: this.currentBookingSeat.split('-')[0],
             seat: this.currentBookingSeat.split('-')[1],
@@ -444,22 +447,21 @@ class StudentTicketingSystem {
             firstName: `"${data.firstName}" (type: ${typeof data.firstName})`,
             lastName: `"${data.lastName}" (type: ${typeof data.lastName})`,
             phone: `"${data.phone}" (type: ${typeof data.phone})`,
+            // email removed - phone-only authentication
         });
 
         if (!data.firstName || !data.firstName?.trim()) errors.push('Имя обязательно');
         if (!data.lastName || !data.lastName?.trim()) errors.push('Фамилия обязательна');
         if (!data.phone || !data.phone?.trim()) errors.push('Телефон обязателен');
+        // Email validation removed - phone-only authentication
 
-        // Phone validation - must start with + (international format)
-        if (data.phone && !data.phone.startsWith('+')) {
-            errors.push('Номер телефона должен начинаться с + (международный формат, например: +996 777 123 456)');
-        }
-        
-        // Additional phone format validation - international format
-        const phoneRegex = /^\+\d{1,4}\s?\d{3,4}\s?\d{3,4}\s?\d{3,4}$/;
+        // Phone number validation (E.164 format)
+        const phoneRegex = /^\+\d{8,15}$/;
         if (data.phone && !phoneRegex.test(data.phone)) {
-            errors.push('Пожалуйста, введите корректный номер телефона в международном формате (например: +996 777 123 456)');
+            errors.push('Please enter a valid phone number in E.164 format (e.g., +996555123456)');
         }
+
+        // Duplicate phone validation removed
 
         if (errors.length > 0) {
             alert('Пожалуйста, проверьте данные:\n' + errors.join('\n'));
@@ -1488,7 +1490,6 @@ Socket.IO Diagnostics:
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-User-Role': 'admin' // Add admin role header
                 }
             });
 
@@ -1852,81 +1853,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const system = new StudentTicketingSystem();
     // Initialize seating plan image zoom functionality
     initializeSeatingPlanImage();
-    
-    // Add phone number input masking
-    const phoneInput = document.getElementById('phone');
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, ''); // Remove all non-digits
-            
-            // If it doesn't start with 996, add it
-            if (value && !value.startsWith('996')) {
-                value = '996' + value;
-            }
-            
-            // Format as +996 XXX XXX XXX
-            if (value.length > 3) {
-                value = '+996 ' + value.substring(3).replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
-            } else if (value.length > 0) {
-                value = '+996 ' + value.substring(3);
-            }
-            
-            e.target.value = value;
-        });
-        
-        // Ensure it starts with +996 when focused
-        phoneInput.addEventListener('focus', function(e) {
-            if (!e.target.value.startsWith('+996')) {
-                e.target.value = '+996 ';
-            }
-        });
-    }
-    
-    // Add payment confirmation functionality
-    const confirmPaymentBtn = document.getElementById('confirmPayment');
-    if (confirmPaymentBtn) {
-        confirmPaymentBtn.addEventListener('click', async function() {
-            const bookingId = document.getElementById('confirmedBookingId')?.textContent;
-            if (!bookingId) {
-                alert('Ошибка: ID бронирования не найден');
-                return;
-            }
-            
-            try {
-                confirmPaymentBtn.disabled = true;
-                confirmPaymentBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обработка...';
-                
-                const response = await fetch('/api/confirm-payment', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ bookingId: bookingId })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert('✅ Оплата подтверждена! Билет отправлен в WhatsApp на ваш номер телефона.');
-                    // Close the modal
-                    const modal = document.getElementById('confirmationModal');
-                    if (modal) {
-                        modal.style.display = 'none';
-                    }
-                    // Refresh the page to update seat statuses
-                    location.reload();
-                } else {
-                    alert('❌ Ошибка: ' + (result.message || result.error || 'Не удалось подтвердить оплату'));
-                }
-            } catch (error) {
-                console.error('Error confirming payment:', error);
-                alert('❌ Ошибка при подтверждении оплаты. Попробуйте еще раз.');
-            } finally {
-                confirmPaymentBtn.disabled = false;
-                confirmPaymentBtn.innerHTML = '<i class="fas fa-check"></i> Я оплатил';
-            }
-        });
-    }
 });
 
 // Initialize seating plan image zoom functionality

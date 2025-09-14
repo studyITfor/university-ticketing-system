@@ -12,15 +12,6 @@ const { Blob } = require('buffer');
 const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
-const WhatsAppFallbackSystem = require('./whatsapp-fallback');
-const { 
-    sequelize, 
-    Booking, 
-    Seat, 
-    AdminSession, 
-    initializeDatabase, 
-    closeDatabase 
-} = require('./database');
 
 const app = express();
 const server = createServer(app);
@@ -43,14 +34,12 @@ const PORT = process.env.PORT || config.server.port || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// Serve frontend files
-app.use(express.static(path.join(__dirname, '../frontend')));
+app.use(express.static('.'));
 // Serve static files from public directory
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure tickets directory exists
-const ticketsDir = path.join(__dirname, '../tickets');
+const ticketsDir = path.join(__dirname, 'tickets');
 fs.ensureDirSync(ticketsDir);
 
 // Green API configuration
@@ -61,16 +50,13 @@ const GREEN_API_TOKEN = config.whatsapp.token;
 // Initialize Secure Ticket System
 const secureTicketSystem = new SecureTicketSystem(
     config.tickets?.secretKey || 'default-secret-key-change-in-production',
-    path.join(__dirname, '../secure-tickets-database.json')
+    path.join(__dirname, 'secure-tickets-database.json')
 );
 
-// Initialize WhatsApp fallback system
-const { handleFailedDelivery } = require('./whatsapp-fallback');
-
 // Function to emit seat updates to all connected clients
-async function emitSeatUpdate() {
+function emitSeatUpdate() {
     try {
-        // Get current seat statuses from database
+        // Get current seat statuses
         const seatStatuses = {};
         
         // Initialize all seats as available (active) - using correct table count
@@ -81,41 +67,30 @@ async function emitSeatUpdate() {
             }
         }
         
-        // Load bookings from file-based storage (primary method due to database connection issues)
-        let bookings = [];
+        // Load bookings and update seat statuses
         const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
         
         if (fs.existsSync(bookingsPath)) {
-            try {
-                const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-                bookings = Object.values(fileBookings).map(booking => ({
-                    tableNumber: booking.table,
-                    seatNumber: booking.seat,
-                    paymentStatus: booking.status,
-                    isActive: true
-                }));
-                console.log(`📁 Loaded ${bookings.length} bookings from file storage`);
-            } catch (fileError) {
-                console.error('❌ Failed to load bookings from file:', fileError.message);
-            }
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
         }
         
         // Update seat statuses based on bookings
-        bookings.forEach(booking => {
-            if (booking.tableNumber && booking.seatNumber && booking.paymentStatus) {
-                const seatId = `${booking.tableNumber}-${booking.seatNumber}`;
+        Object.values(bookings).forEach(booking => {
+            if (booking.table && booking.seat && booking.status) {
+                const seatId = `${booking.table}-${booking.seat}`;
                 let status = 'active'; // default
                 
-                if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен') {
+                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
                     status = 'reserved';
-                } else if (booking.paymentStatus === 'pending') {
+                } else if (booking.status === 'pending') {
                     status = 'pending';
-                } else if (booking.paymentStatus === 'prebooked') {
+                } else if (booking.status === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.paymentStatus})`);
+                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
             }
         });
         
@@ -406,7 +381,7 @@ function emitSeatBulkUpdate() {
                 const seatId = `${booking.table}-${booking.seat}`;
                 let status = 'active'; // default
                 
-                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
+                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
                 } else if (booking.status === 'pending') {
                     status = 'pending';
@@ -489,6 +464,7 @@ function prebookSeats(seatIds, prebookType = 'manual') {
                 lastName: prebookType.toUpperCase(),
                 studentId: 'PREBOOK',
                 phone: '0000000000',
+                email: 'prebook@system.local',
                 status: 'prebooked',
                 timestamp: Date.now(),
                 prebookType: prebookType,
@@ -578,7 +554,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         const page = pdfDoc.addPage([600, 400]); // Landscape orientation for ticket format
         
         // Load Roboto font for Cyrillic support
-        const robotoFontBytes = fs.readFileSync(path.join(__dirname, '../fonts', 'ofont.ru_Roboto.ttf'));
+        const robotoFontBytes = fs.readFileSync(path.join(__dirname, 'fonts', 'ofont.ru_Roboto.ttf'));
         const robotoFont = await pdfDoc.embedFont(robotoFontBytes);
         
         // Colors - Golden theme
@@ -637,7 +613,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         });
         
         // Event details section
-        page.drawText('Дата: 26 октября', {
+        page.drawText('Date: October 26', {
             x: 50,
             y: 280,
             size: 14,
@@ -645,7 +621,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
             color: textColor,
         });
         
-        page.drawText('Время: 18:00', {
+        page.drawText('Time: 18:00', {
             x: 250,
             y: 280,
             size: 14,
@@ -653,7 +629,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
             color: textColor,
         });
         
-        page.drawText('Место: Асман', {
+        page.drawText('Venue: Asman', {
             x: 450,
             y: 280,
             size: 14,
@@ -670,7 +646,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         });
         
         // Student name section
-        page.drawText('Имя и фамилия', {
+        page.drawText('First and Last Name', {
             x: 250,
             y: 230,
             size: 16,
@@ -736,7 +712,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         }
         
         // Seat information section (left side as requested)
-        page.drawText('Номер стола и место', {
+        page.drawText('Table and Seat Number', {
             x: 80,
             y: 150,
             size: 14,
@@ -753,7 +729,7 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
         });
         
         // Student's actual seat information
-        const seatInfo = `Стол ${bookingData.table}, Место ${bookingData.seat}`;
+        const seatInfo = `Table ${bookingData.table}, Seat ${bookingData.seat}`;
         page.drawText(seatInfo, {
             x: 80 - (seatInfo.length * 2.5), // Center the seat info
             y: 110,
@@ -780,148 +756,156 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
     }
 }
 
-// Send WhatsApp ticket with improved reliability and logging
+// Send WhatsApp ticket
 async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
-    const startTime = Date.now();
-    const attemptId = `WHATSAPP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
     try {
-        console.log(`📱 [${attemptId}] Начинаем отправку WhatsApp билета для ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
+        console.log(`📱 Starting WhatsApp ticket sending for ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
         
-        // Improved phone number processing - maintain international format
-        let phoneNumber = phone.trim();
-        if (phoneNumber.startsWith('+')) {
-            phoneNumber = phoneNumber.substring(1); // Remove + but keep the rest
-        }
-        
-        // Ensure it's a valid international number
-        if (!/^\d{10,15}$/.test(phoneNumber)) {
-            throw new Error(`Invalid phone number format: ${phone} (processed: ${phoneNumber})`);
-        }
-        
+        const phoneNumber = phone.replace(/[^\d]/g, '');
         const chatId = `${phoneNumber}@c.us`;
-        console.log(`📞 [${attemptId}] Обработанный номер телефона: ${phoneNumber}`);
-        console.log(`💬 [${attemptId}] Chat ID: ${chatId}`);
 
-        // Enhanced message with better formatting
+        console.log(`📞 Processed phone number: ${phoneNumber}`);
+        console.log(`💬 Chat ID: ${chatId}`);
+
+        // Send message first
         const messageData = {
             chatId: chatId,
-            message: `🎫 *Здравствуйте, ${bookingData.firstName}!*\n\n🎉 *Ваш золотой билет на GOLDENMIDDLE готов!*\n\n📅 *Дата:* 26 октября 2025\n⏰ *Время:* 18:00\n📍 *Место:* Асман\n🪑 *Ваше место:* Стол ${bookingData.table}, Место ${bookingData.seat}\n💵 *Цена:* 5500 Сом\n🆔 *ID билета:* ${ticketId}\n\n📎 *Билет во вложении.* Покажите его при входе на мероприятие!\n\n🎊 *Добро пожаловать на GOLDENMIDDLE!*`
+            message: `🎫 Hello, ${bookingData.firstName}!\n\nYour golden ticket for GOLDENMIDDLE is ready!\n\n📅 Date: October 26\n⏰ Time: 18:00\n📍 Venue: Asman\n🪑 Your seat: Table ${bookingData.table}, Seat ${bookingData.seat}\n💵 Price: 5500 Som\n🆔 Ticket ID: ${ticketId}\n\nTicket is attached. Show it at the event entrance!`
         };
 
-        console.log(`📤 [${attemptId}] Отправляем текстовое сообщение...`);
+        console.log('📤 Sending text message...');
         const messageResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendMessage/${GREEN_API_TOKEN}`,
-            messageData,
-            {
-                timeout: 30000, // 30 second timeout
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }
+            messageData
         );
 
-        console.log(`📊 [${attemptId}] Message API Response:`, {
-            status: messageResponse.status,
-            data: messageResponse.data
-        });
-
         if (!messageResponse.data.idMessage) {
-            throw new Error(`Failed to send WhatsApp message - no message ID returned. Response: ${JSON.stringify(messageResponse.data)}`);
+            throw new Error('Failed to send WhatsApp message - no message ID returned');
         }
 
-        console.log(`✅ [${attemptId}] WhatsApp сообщение отправлено успешно, ID: ${messageResponse.data.idMessage}`);
+        console.log('✅ WhatsApp message sent successfully, ID:', messageResponse.data.idMessage);
 
-        // Send the PDF file with improved error handling
-        console.log(`📄 [${attemptId}] Подготавливаем PDF файл для отправки...`);
-        console.log(`📊 [${attemptId}] Размер PDF: ${pdfBytes.length} байт`);
+        // Send the PDF file using undici's FormData
+        console.log('📄 Preparing PDF file for sending...');
+        console.log(`📊 PDF size: ${pdfBytes.length} bytes`);
         
         const formData = new FormData();
         formData.append('chatId', chatId);
         
         // Convert PDF buffer to Blob for undici FormData compatibility
         const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-        console.log(`📄 [${attemptId}] Blob создан: type=${pdfBlob.type}, size=${pdfBlob.size} байт`);
+        console.log(`📄 Blob created: type=${pdfBlob.type}, size=${pdfBlob.size} bytes`);
         
-        formData.append('file', pdfBlob, `ticket_${ticketId}.pdf`);
-        console.log(`✅ [${attemptId}] PDF файл добавлен в FormData`);
+        formData.append('file', pdfBlob, 'ticket.pdf');
+        console.log('✅ PDF file added to FormData');
 
-        console.log(`📤 [${attemptId}] Отправляем PDF файл через WhatsApp API...`);
+        console.log('📤 Sending PDF file via WhatsApp API...');
         const fileResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendFileByUpload/${GREEN_API_TOKEN}`,
             formData,
             {
-                timeout: 60000, // 60 second timeout for file upload
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
             }
         );
 
-        console.log(`📊 [${attemptId}] File API Response:`, {
-            status: fileResponse.status,
-            data: fileResponse.data
-        });
-
         if (!fileResponse.data.idMessage) {
-            throw new Error(`Failed to send WhatsApp file - no message ID returned. Response: ${JSON.stringify(fileResponse.data)}`);
+            throw new Error('Failed to send WhatsApp file - no message ID returned');
         }
 
-        const duration = Date.now() - startTime;
-        console.log(`✅ [${attemptId}] WhatsApp билет отправлен успешно! (${duration}ms)`);
-        console.log(`📱 [${attemptId}] Получатель: ${phone}`);
-        console.log(`🎫 [${attemptId}] ID билета: ${ticketId}`);
-        console.log(`📄 [${attemptId}] ID файла: ${fileResponse.data.idMessage}`);
+        console.log('✅ WhatsApp ticket sent successfully!');
+        console.log(`📱 Recipient: ${phone}`);
+        console.log(`🎫 Ticket ID: ${ticketId}`);
+        console.log(`📄 File ID: ${fileResponse.data.idMessage}`);
         
-        // Log successful sending for audit
-        console.log(`📋 [${attemptId}] AUDIT: WhatsApp ticket sent successfully`, {
-            phone: phone,
-            ticketId: ticketId,
-            bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
-            messageId: messageResponse.data.idMessage,
-            fileId: fileResponse.data.idMessage,
-            duration: duration,
-            timestamp: new Date().toISOString()
-        });
-        
-        return {
-            success: true,
-            messageId: messageResponse.data.idMessage,
-            fileId: fileResponse.data.idMessage,
-            duration: duration
-        };
+        return true;
     } catch (error) {
-        const duration = Date.now() - startTime;
-        console.error(`❌ [${attemptId}] Ошибка при отправке WhatsApp билета (${duration}ms):`, error.message);
-        console.error(`📄 [${attemptId}] Детали ошибки:`, {
+        console.error('❌ Error sending WhatsApp ticket:', error.message);
+        console.error('📄 Error details:', {
             phone: phone,
             ticketId: ticketId,
             bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
             error: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            responseData: error.response?.data,
-            duration: duration,
-            timestamp: new Date().toISOString()
+            stack: error.stack
         });
-        
-        // Log failed sending for audit
-        console.log(`📋 [${attemptId}] AUDIT: WhatsApp ticket sending failed`, {
-            phone: phone,
-            ticketId: ticketId,
-            bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
-            error: error.message,
-            status: error.response?.status,
-            duration: duration,
-            timestamp: new Date().toISOString()
-        });
-        
         throw error;
     }
 }
 
 
 // API Routes
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    try {
+        // Check if bookings file exists and is readable
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
+        let databaseStatus = 'healthy';
+        
+        if (fs.existsSync(bookingsPath)) {
+            try {
+                const data = fs.readFileSync(bookingsPath, 'utf8');
+                bookings = JSON.parse(data);
+            } catch (error) {
+                databaseStatus = 'error';
+                console.error('Error reading bookings file:', error);
+            }
+        } else {
+            // Create empty bookings file if it doesn't exist
+            try {
+                fs.writeFileSync(bookingsPath, JSON.stringify({}, null, 2));
+                databaseStatus = 'healthy';
+            } catch (error) {
+                databaseStatus = 'error';
+                console.error('Error creating bookings file:', error);
+            }
+        }
+        
+        const healthData = {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            server: {
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                version: process.version,
+                platform: process.platform
+            },
+            database: {
+                status: databaseStatus,
+                bookingsCount: Object.keys(bookings).length,
+                filePath: bookingsPath,
+                exists: fs.existsSync(bookingsPath)
+            },
+            socket: {
+                connectedClients: io.engine.clientsCount,
+                rooms: Array.from(io.sockets.adapter.rooms.keys())
+            },
+            application: {
+                name: 'Golden Middle Ticketing System',
+                version: '1.0.0',
+                totalSeats: 504, // 36 tables * 14 seats
+                availableSeats: 504 - Object.values(bookings).filter(b => 
+                    b.status === 'paid' || b.status === 'confirmed' || b.status === 'paid_ru' || b.status === 'prebooked'
+                ).length
+            }
+        };
+        
+        res.status(200).json(healthData);
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({
+            status: 'error',
+            timestamp: new Date().toISOString(),
+            error: error.message,
+            server: {
+                uptime: process.uptime(),
+                version: process.version
+            }
+        });
+    }
+});
 
 // Create new booking
 app.post('/api/create-booking', async (req, res) => {
@@ -930,6 +914,9 @@ app.post('/api/create-booking', async (req, res) => {
         
         // Generate unique booking ID
         const bookingId = 'BK' + Date.now().toString(36).toUpperCase();
+        bookingData.id = bookingId;
+        bookingData.status = 'pending';
+        bookingData.bookingDate = new Date().toISOString();
         
         // Handle seatId format (e.g., "3-3" -> table: 3, seat: 3)
         if (bookingData.seatId && !bookingData.table) {
@@ -952,78 +939,45 @@ app.post('/api/create-booking', async (req, res) => {
             return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
         }
         
-        // Validate phone number format (must start with +)
-        if (!bookingData.phone || !bookingData.phone.startsWith('+')) {
-            console.log('❌ Invalid phone format:', bookingData.phone);
-            return res.status(400).json({ error: 'Номер телефона должен начинаться с + (международный формат)' });
+        // Validate phone number (E.164 format)
+        if (!bookingData.phone) {
+            return res.status(400).json({ error: 'Phone number is required.' });
         }
         
-        // Additional phone validation
-        const phoneRegex = /^\+\d{1,4}\s?\d{3,4}\s?\d{3,4}\s?\d{3,4}$/;
+        const phoneRegex = /^\+\d{8,15}$/;
         if (!phoneRegex.test(bookingData.phone)) {
-            console.log('❌ Invalid phone format:', bookingData.phone);
-            return res.status(400).json({ error: 'Пожалуйста, введите корректный номер телефона в международном формате' });
+            return res.status(400).json({ error: 'Invalid phone number format. Please use E.164 format (e.g., +996555123456).' });
         }
         
         console.log('✅ Booking data after parsing:', {
-            id: bookingId,
+            id: bookingData.id,
             seatId: bookingData.seatId,
             table: bookingData.table,
             seat: bookingData.seat,
-            status: 'pending'
+            status: bookingData.status
         });
         
-        // Check if seat is already booked using file storage
+        // Load existing bookings
         const bookingsPath = path.join(__dirname, 'bookings.json');
-        let fileBookings = {};
+        let bookings = {};
         
         if (fs.existsSync(bookingsPath)) {
-            try {
-                fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-            } catch (fileError) {
-                console.error('❌ Failed to read bookings file:', fileError.message);
-            }
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
         }
         
-        // Check for existing confirmed bookings
-        const existingBooking = Object.values(fileBookings).find(booking => 
-            booking.table === bookingData.table && 
-            booking.seat === bookingData.seat && 
-            ['paid', 'confirmed', 'Оплачен', 'prebooked'].includes(booking.status)
+        // Check if seat is already booked (only check for confirmed bookings)
+        const existingBooking = Object.values(bookings).find(b => 
+            b.table == bookingData.table && b.seat == bookingData.seat && 
+            (b.status === 'paid' || b.status === 'confirmed' || b.status === 'paid_ru' || b.status === 'prebooked')
         );
         
         if (existingBooking) {
-            return res.status(400).json({ error: 'Место уже забронировано' });
+            return res.status(400).json({ error: 'Seat already booked' });
         }
         
-        // Create booking in file storage
-        fileBookings[bookingId] = {
-            id: bookingId,
-            firstName: bookingData.firstName,
-            lastName: bookingData.lastName,
-            studentId: bookingData.studentId || 'N/A',
-            phone: bookingData.phone,
-            table: bookingData.table,
-            seat: bookingData.seat,
-            status: 'pending',
-            timestamp: Date.now()
-        };
-        
-        try {
-            fs.writeFileSync(bookingsPath, JSON.stringify(fileBookings, null, 2));
-            console.log(`📁 Booking saved to file storage: ${bookingId}`);
-        } catch (fileError) {
-            console.error('❌ Failed to save booking to file:', fileError.message);
-            return res.status(500).json({ error: 'Ошибка при создании бронирования' });
-        }
-        
-        // Create a mock booking object for the response
-        const newBooking = {
-            id: bookingId,
-            ticketId: bookingId,
-            tableNumber: bookingData.table,
-            seatNumber: bookingData.seat
-        };
+        // Save booking
+        bookings[bookingId] = bookingData;
+        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1035,7 +989,7 @@ app.post('/api/create-booking', async (req, res) => {
                 bookingId: bookingId,
                 table: bookingData.table,
                 seat: bookingData.seat,
-                status: 'pending',
+                status: bookingData.status,
                 firstName: bookingData.firstName,
                 lastName: bookingData.lastName
             },
@@ -1053,7 +1007,7 @@ app.post('/api/create-booking', async (req, res) => {
         console.log(`📡 API booking created broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
-        await emitSeatUpdate();
+        emitSeatUpdate();
         
         res.json({
             success: true,
@@ -1072,38 +1026,40 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { bookingId } = req.body;
         
-        // Find booking in database
-        const booking = await Booking.findOne({
-            where: { ticketId: bookingId, isActive: true }
-        });
+        // Load bookings from localStorage (in a real app, this would be a database)
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
         
+        if (fs.existsSync(bookingsPath)) {
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+        }
+        
+        const booking = bookings[bookingId];
         if (!booking) {
             return res.status(404).json({ error: 'Бронирование не найдено' });
         }
         
         // Update booking status
-        await booking.update({
-            paymentStatus: 'Оплачен',
-            paymentDate: new Date(),
-            paymentConfirmedBy: 'admin'
-        });
+        booking.status = 'Оплачен';
+        booking.paymentDate = new Date().toISOString();
+        booking.paymentConfirmedBy = 'admin';
         
         // Generate unique ticket ID
         const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
-        await booking.update({ ticketId: ticketId });
+        booking.ticketId = ticketId;
         
         // Generate QR code data
         const qrData = {
             ticketId: ticketId,
             bookingId: booking.id,
-            seatId: `${booking.tableNumber}-${booking.seatNumber}`,
+            seatId: `${booking.table}-${booking.seat}`,
             event: 'GOLDENMIDDLE',
             organization: 'КГМА',
             date: '2025-10-26',
             time: '18:00',
             venue: 'Асман',
-            name: booking.studentName,
-            seat: `Стол ${booking.tableNumber}, Место ${booking.seatNumber}`,
+            name: `${booking.firstName} ${booking.lastName}`,
+            seat: `Стол ${booking.table}, Место ${booking.seat}`,
             timestamp: Date.now()
         };
         
@@ -1111,161 +1067,19 @@ app.post('/api/confirm-payment', async (req, res) => {
         const qrCodeDataURL = await generateQRCode(qrData);
         
         // Generate PDF ticket
-        const pdfBuffer = await generatePDFTicket({
-            ...booking.toJSON(),
-            firstName: booking.studentName.split(' ')[0],
-            lastName: booking.studentName.split(' ').slice(1).join(' '),
-            table: booking.tableNumber,
-            seat: booking.seatNumber
-        }, qrCodeDataURL);
+        const pdfBuffer = await generatePDFTicket(booking, qrCodeDataURL);
         
         // Save PDF to tickets folder
         const ticketFileName = `${ticketId}.pdf`;
         const ticketPath = path.join(ticketsDir, ticketFileName);
         fs.writeFileSync(ticketPath, pdfBuffer);
         
-        // Validate phone number format before sending WhatsApp
-        const phoneNumber = booking.phone;
-        if (!phoneNumber || !phoneNumber.startsWith('+')) {
-            console.warn(`⚠️ Invalid phone number format for booking ${bookingId}: ${phoneNumber}. Skipping WhatsApp send.`);
-            return res.status(400).json({ 
-                error: 'Invalid phone number format',
-                message: 'Номер телефона должен быть в международном формате (начинаться с +) для отправки билета в WhatsApp'
-            });
-        }
-
-        // Send WhatsApp ticket with enhanced retry logic and comprehensive logging
-        let whatsappResult = {
-            success: false,
-            attempts: 0,
-            lastError: null,
-            messageId: null,
-            fileId: null,
-            totalDuration: 0,
-            quotaExceeded: false,
-            whitelistRestricted: false
-        };
-        const maxRetries = 3;
-        const retryDelay = 2000; // 2 seconds
+        // Send WhatsApp ticket
+        await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, booking);
         
-        console.log(`📱 Starting WhatsApp ticket delivery for booking ${bookingId} (${booking.phone})`);
-        
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            whatsappResult.attempts = attempt;
-            const attemptStartTime = Date.now();
-            
-            try {
-                console.log(`📱 Attempt ${attempt}/${maxRetries} - Sending WhatsApp ticket to ${booking.phone}...`);
-                
-                const result = await sendWhatsAppTicket(booking.phone, pdfBuffer, ticketId, {
-                    firstName: booking.studentName.split(' ')[0],
-                    lastName: booking.studentName.split(' ').slice(1).join(' '),
-                    table: booking.tableNumber,
-                    seat: booking.seatNumber
-                });
-                
-                whatsappResult.success = true;
-                whatsappResult.messageId = result.messageId;
-                whatsappResult.fileId = result.fileId;
-                whatsappResult.totalDuration = Date.now() - attemptStartTime;
-                
-                console.log(`✅ WhatsApp ticket sent successfully on attempt ${attempt}!`);
-                console.log(`📊 WhatsApp delivery stats:`, {
-                    attempt: attempt,
-                    messageId: result.messageId,
-                    fileId: result.fileId,
-                    duration: result.duration,
-                    phone: booking.phone,
-                    ticketId: ticketId
-                });
-                break;
-                
-            } catch (whatsappError) {
-                const attemptDuration = Date.now() - attemptStartTime;
-                whatsappResult.lastError = whatsappError.message;
-                whatsappResult.totalDuration += attemptDuration;
-                
-                // Analyze error type for better handling
-                const status = whatsappError.response?.status;
-                const responseData = whatsappError.response?.data;
-                
-                if (status === 466) {
-                    whatsappResult.quotaExceeded = true;
-                    whatsappResult.whitelistRestricted = true;
-                    console.error(`❌ WhatsApp attempt ${attempt} failed - QUOTA EXCEEDED/WHITELIST RESTRICTED (${attemptDuration}ms)`);
-                    console.error(`📊 Quota/Whitelist Error Details:`, {
-                        phone: booking.phone,
-                        status: status,
-                        responseData: responseData,
-                        duration: attemptDuration
-                    });
-                    
-                    // Don't retry for quota/whitelist issues - they won't succeed
-                    console.log(`🛑 Stopping retries - quota exceeded or number not whitelisted`);
-                    break;
-                } else {
-                    console.error(`❌ WhatsApp attempt ${attempt} failed (${attemptDuration}ms):`, whatsappError.message);
-                    console.error(`📊 Attempt ${attempt} error details:`, {
-                        error: whatsappError.message,
-                        status: status,
-                        statusText: whatsappError.response?.statusText,
-                        phone: booking.phone,
-                        ticketId: ticketId,
-                        duration: attemptDuration
-                    });
-                }
-                
-                if (attempt < maxRetries && !whatsappResult.quotaExceeded) {
-                    console.log(`⏳ Waiting ${retryDelay}ms before retry ${attempt + 1}/${maxRetries}...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                } else if (whatsappResult.quotaExceeded) {
-                    console.error(`❌ WhatsApp delivery stopped due to quota/whitelist restrictions for booking ${bookingId}`);
-                } else {
-                    console.error(`❌ All ${maxRetries} WhatsApp attempts failed for booking ${bookingId}`);
-                    console.error(`📊 Final WhatsApp failure summary:`, {
-                        phone: booking.phone,
-                        ticketId: ticketId,
-                        attempts: maxRetries,
-                        totalDuration: whatsappResult.totalDuration,
-                        lastError: whatsappResult.lastError
-                    });
-                }
-            }
-        }
-        
-        // Log final WhatsApp delivery status
-        if (whatsappResult.success) {
-            console.log(`🎉 WhatsApp ticket delivery SUCCESSFUL for booking ${bookingId}`, {
-                phone: booking.phone,
-                ticketId: ticketId,
-                attempts: whatsappResult.attempts,
-                messageId: whatsappResult.messageId,
-                fileId: whatsappResult.fileId,
-                totalDuration: whatsappResult.totalDuration
-            });
-        } else {
-            console.warn(`⚠️ WhatsApp ticket delivery FAILED for booking ${bookingId}`, {
-                phone: booking.phone,
-                ticketId: ticketId,
-                attempts: whatsappResult.attempts,
-                totalDuration: whatsappResult.totalDuration,
-                lastError: whatsappResult.lastError
-            });
-            
-            // Try fallback system for failed WhatsApp delivery
-            try {
-                console.log(`🔄 Attempting fallback delivery for booking ${bookingId}...`);
-                await handleFailedDelivery(booking.phone, pdfBuffer, ticketId, {
-                    firstName: booking.studentName.split(' ')[0],
-                    lastName: booking.studentName.split(' ').slice(1).join(' '),
-                    table: booking.tableNumber,
-                    seat: booking.seatNumber
-                });
-                console.log(`✅ Fallback delivery initiated for booking ${bookingId}`);
-            } catch (fallbackError) {
-                console.error(`❌ Fallback system also failed for booking ${bookingId}:`, fallbackError);
-            }
-        }
+        // Update bookings
+        bookings[bookingId] = booking;
+        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1275,18 +1089,18 @@ app.post('/api/confirm-payment', async (req, res) => {
             type: 'payment-confirmed',
             data: {
                 bookingId: bookingId,
-                table: booking.tableNumber,
-                seat: booking.seatNumber,
-                status: booking.paymentStatus,
-                firstName: booking.studentName.split(' ')[0],
-                lastName: booking.studentName.split(' ').slice(1).join(' '),
+                table: booking.table,
+                seat: booking.seat,
+                status: booking.status,
+                firstName: booking.firstName,
+                lastName: booking.lastName,
                 ticketId: ticketId
             },
             timestamp: Date.now()
         });
         
         // Emit individual seat status update
-        const seatId = `${booking.tableNumber}-${booking.seatNumber}`;
+        const seatId = `${booking.table}-${booking.seat}`;
         io.emit('update-seat-status', {
             seatId: seatId,
             status: 'booked',
@@ -1296,33 +1110,13 @@ app.post('/api/confirm-payment', async (req, res) => {
         console.log(`📡 Payment confirmed broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
-        await emitSeatUpdate();
+        emitSeatUpdate();
         
-        // Generate appropriate response message based on the issue
-        let responseMessage;
-        if (whatsappResult.success) {
-            responseMessage = 'Оплата подтверждена и билет отправлен в WhatsApp';
-        } else if (whatsappResult.quotaExceeded) {
-            responseMessage = 'Оплата подтверждена. Билет сохранен локально. WhatsApp недоступен (превышена квота). Обратитесь к администратору.';
-        } else {
-            responseMessage = 'Оплата подтверждена, но не удалось отправить билет в WhatsApp. Билет сохранен локально.';
-        }
-
         res.json({
             success: true,
-            message: responseMessage,
+            message: 'Оплата подтверждена и билет отправлен в WhatsApp',
             ticketId: ticketId,
-            ticketPath: `/tickets/${ticketFileName}`,
-            whatsappDelivery: {
-                success: whatsappResult.success,
-                attempts: whatsappResult.attempts,
-                messageId: whatsappResult.messageId,
-                fileId: whatsappResult.fileId,
-                duration: whatsappResult.totalDuration,
-                lastError: whatsappResult.lastError,
-                quotaExceeded: whatsappResult.quotaExceeded,
-                whitelistRestricted: whatsappResult.whitelistRestricted
-            }
+            ticketPath: `/tickets/${ticketFileName}`
         });
         
     } catch (error) {
@@ -1333,221 +1127,89 @@ app.post('/api/confirm-payment', async (req, res) => {
 
 // Delete booking
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
-    let transaction;
     try {
         const { bookingId } = req.params;
-        const userIp = req.ip || req.connection.remoteAddress;
         
-        console.log(`🔍 Attempting to delete booking with ID: ${bookingId}`);
-        console.log(`👤 User IP: ${userIp} - Deletion allowed for any user with admin panel access`);
+        // Load bookings
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
         
-        // Start transaction for atomic operations
-        transaction = await sequelize.transaction();
+        if (fs.existsSync(bookingsPath)) {
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+        }
         
-        // Find the booking in the database - try both ticketId and id fields
-        let booking = await Booking.findOne({
-            where: { ticketId: bookingId, isActive: true },
-            include: [{
-                model: Seat,
-                as: 'Seats'
-            }],
-            transaction
-        });
-        
-        // If not found by ticketId, try by id (in case frontend sends the wrong ID)
+        const booking = bookings[bookingId];
         if (!booking) {
-            console.log(`🔍 Not found by ticketId, trying by id: ${bookingId}`);
-            booking = await Booking.findOne({
-                where: { id: bookingId, isActive: true },
-                include: [{
-                    model: Seat,
-                    as: 'Seats'
-                }],
-                transaction
-            });
+            return res.status(404).json({ error: 'Booking not found' });
         }
-        
-        if (!booking) {
-            if (transaction) {
-                await transaction.rollback();
-            }
-            return res.status(404).json({ 
-                success: false,
-                error: 'Booking not found',
-                message: 'Бронирование не найдено или уже удалено'
-            });
-        }
-        
-        // Check if booking is paid (for logging purposes only)
-        const isPaid = booking.paymentStatus === 'paid' || booking.paymentStatus === 'confirmed' || booking.paymentStatus === 'Оплачен';
-        
-        // Allow deletion of any booking regardless of payment status
-        // This change allows any user with admin panel access to delete any booking
-        
-        console.log(`✅ Booking deletion authorized for user: ${userIp}, booking status: ${booking.paymentStatus}`);
-        
-        // Create comprehensive backup of booking data
-        const bookingBackup = {
-            id: booking.id,
-            ticketId: booking.ticketId,
-            studentName: booking.studentName,
-            studentId: booking.studentId,
-            phone: booking.phone,
-            tableNumber: booking.tableNumber,
-            seatNumber: booking.seatNumber,
-            bookingTime: booking.bookingTime,
-            paymentStatus: booking.paymentStatus,
-            isActive: booking.isActive,
-            createdAt: booking.createdAt,
-            updatedAt: booking.updatedAt,
-            seats: booking.Seats ? booking.Seats.map(seat => ({
-                id: seat.id,
-                tableNumber: seat.tableNumber,
-                seatNumber: seat.seatNumber,
-                isBooked: seat.isBooked,
-                bookingId: seat.bookingId
-            })) : []
-        };
-        
-        // Log deletion for audit trail (simplified for testing)
-        console.log(`📝 Deletion logged for booking ${booking.ticketId} by user from ${userIp}`);
-        console.log(`📋 Booking backup data:`, JSON.stringify(bookingBackup, null, 2));
-        
-        // Store booking data for event emission
-        const deletedBooking = {
-            id: booking.ticketId,
-            table: booking.tableNumber,
-            seat: booking.seatNumber,
-            firstName: booking.studentName.split(' ')[0],
-            lastName: booking.studentName.split(' ').slice(1).join(' '),
-            paymentStatus: booking.paymentStatus
-        };
-        
-        // Update associated seats to available
-        if (booking.Seats && booking.Seats.length > 0) {
-            await Promise.all(booking.Seats.map(seat =>
-                seat.update({ isBooked: false, bookingId: null }, { transaction })
-            ));
-        }
-        
-        // Mark booking as inactive (soft delete)
-        await booking.update({ isActive: false }, { transaction });
         
         // Delete ticket file if exists
         if (booking.ticketId) {
             const ticketPath = path.join(ticketsDir, `${booking.ticketId}.pdf`);
             if (fs.existsSync(ticketPath)) {
-                try {
-                    fs.unlinkSync(ticketPath);
-                    console.log(`🗑️ Deleted ticket file: ${ticketPath}`);
-                } catch (fileError) {
-                    console.warn(`⚠️ Could not delete ticket file: ${fileError.message}`);
-                }
+                fs.unlinkSync(ticketPath);
             }
         }
         
-        // Commit transaction
-        await transaction.commit();
-        transaction = null; // Mark transaction as completed to prevent rollback
+        // Store booking data before deletion for event emission
+        const deletedBooking = { ...booking };
         
-        try {
-            // Emit real-time updates to all clients
-            io.to('admins').emit('bookingDeleted', booking.ticketId);
-            await emitSeatUpdate();
-            
-            console.log(`✅ Booking ${booking.ticketId} deleted successfully by user from ${userIp}`);
-            
-            res.status(200).json({ 
-                success: true, 
-                message: 'Бронирование удалено',
-                deletedBooking: {
-                    ticketId: booking.ticketId,
-                    table: booking.tableNumber,
-                    seat: booking.seatNumber,
-                    wasPaid: isPaid
-                }
-            });
-            
-            // Emit individual seat status update
-            const seatId = `${deletedBooking.table}-${deletedBooking.seat}`;
-            io.emit('update-seat-status', {
-                seatId: seatId,
+        // Remove booking
+        delete bookings[bookingId];
+        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        
+        // Emit booking deleted event to all admins
+        const adminsRoom = io.sockets.adapter.rooms.get('admins');
+        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        
+        io.to('admins').emit('update-seat-status', {
+            type: 'booking-deleted',
+            data: {
+                bookingId: bookingId,
+                table: deletedBooking.table,
+                seat: deletedBooking.seat,
                 status: 'available',
-                timestamp: Date.now()
-            });
-            
-            console.log(`📡 Booking deleted broadcasted to all clients`);
-        } catch (postCommitError) {
-            console.error('❌ Error in post-commit operations:', postCommitError);
-            // Don't rollback here as transaction is already committed
-        }
+                firstName: deletedBooking.firstName,
+                lastName: deletedBooking.lastName
+            },
+            timestamp: Date.now()
+        });
+        
+        // Emit individual seat status update
+        const seatId = `${deletedBooking.table}-${deletedBooking.seat}`;
+        io.emit('update-seat-status', {
+            seatId: seatId,
+            status: 'available',
+            timestamp: Date.now()
+        });
+        
+        console.log(`📡 Booking deleted broadcasted to ${adminCount} admin clients in admins room`);
+        
+        // Emit seat update to all connected clients
+        emitSeatUpdate();
+        
+        res.json({
+            success: true,
+            message: 'Бронирование удалено'
+        });
         
     } catch (error) {
-        // Rollback transaction if it exists and hasn't been committed
-        if (transaction && transaction.finished !== 'commit') {
-            try {
-                await transaction.rollback();
-                console.log(`🔄 Transaction rolled back due to error: ${error.message}`);
-            } catch (rollbackError) {
-                console.error('❌ Error during transaction rollback:', rollbackError.message);
-            }
-        }
-        
-        console.error('❌ Error deleting booking:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Ошибка при удалении бронирования',
-            message: 'Произошла ошибка при удалении бронирования. Попробуйте еще раз.'
-        });
+        console.error('Error deleting booking:', error);
+        res.status(500).json({ error: 'Ошибка при удалении бронирования' });
     }
 });
 
 // Get bookings
-app.get('/api/bookings', async (req, res) => {
+app.get('/api/bookings', (req, res) => {
     try {
-        // Load bookings from file storage (primary method)
         const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = [];
+        let bookings = {};
         
         if (fs.existsSync(bookingsPath)) {
-            try {
-                const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-                bookings = Object.values(fileBookings).map(booking => ({
-                    ticketId: booking.id,
-                    studentName: `${booking.firstName} ${booking.lastName}`,
-                    studentId: booking.studentId,
-                    phone: booking.phone,
-                    tableNumber: booking.table,
-                    seatNumber: booking.seat,
-                    paymentStatus: booking.status,
-                    bookingTime: new Date(booking.timestamp),
-                    createdAt: new Date(booking.timestamp)
-                }));
-                console.log(`📁 Loaded ${bookings.length} bookings from file storage`);
-            } catch (fileError) {
-                console.error('❌ Failed to load bookings from file:', fileError.message);
-            }
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
         }
         
-        // Convert to the format expected by the frontend
-        const formattedBookings = {};
-        bookings.forEach(booking => {
-            formattedBookings[booking.ticketId] = {
-                id: booking.ticketId,
-                firstName: booking.studentName.split(' ')[0],
-                lastName: booking.studentName.split(' ').slice(1).join(' '),
-                studentId: booking.studentId,
-                phone: booking.phone,
-                table: booking.tableNumber,
-                seat: booking.seatNumber,
-                status: booking.paymentStatus,
-                bookingDate: booking.bookingTime,
-                paymentDate: booking.paymentDate,
-                ticketId: booking.ticketId
-            };
-        });
-        
-        res.json(formattedBookings);
+        res.json(bookings);
     } catch (error) {
         console.error('Error loading bookings:', error);
         res.status(500).json({ error: 'Ошибка при загрузке бронирований' });
@@ -1604,6 +1266,365 @@ app.get('/tickets/:filename', (req, res) => {
         res.sendFile(filePath);
     } else {
         res.status(404).json({ error: 'Файл билета не найден' });
+    }
+});
+
+// ===== HEALTHCHECK ENDPOINTS =====
+
+// Basic healthcheck
+app.get('/api/health', (req, res) => {
+    try {
+        // Check database connectivity (bookings file)
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        const dbHealthy = fs.existsSync(bookingsPath);
+        
+        // Check secure ticket system
+        const secureTicketsPath = path.join(__dirname, 'secure-tickets-database.json');
+        const secureTicketsHealthy = fs.existsSync(secureTicketsPath);
+        
+        res.json({
+            status: 'ok',
+            uptime_seconds: Math.floor(process.uptime()),
+            db: dbHealthy,
+            secure_tickets: secureTicketsHealthy,
+            version: process.env.GIT_COMMIT_SHORT || 'dev'
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            uptime_seconds: Math.floor(process.uptime()),
+            error: error.message
+        });
+    }
+});
+
+// Readiness healthcheck
+app.get('/api/health/readiness', (req, res) => {
+    try {
+        // Check if all required services are ready
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        const secureTicketsPath = path.join(__dirname, 'secure-tickets-database.json');
+        
+        const dbReady = fs.existsSync(bookingsPath);
+        const secureTicketsReady = fs.existsSync(secureTicketsPath);
+        
+        if (dbReady && secureTicketsReady) {
+            res.json({
+                status: 'healthy',
+                ready: true,
+                services: {
+                    database: true,
+                    secure_tickets: true
+                }
+            });
+        } else {
+            res.status(503).json({
+                status: 'unhealthy',
+                ready: false,
+                services: {
+                    database: dbReady,
+                    secure_tickets: secureTicketsReady
+                }
+            });
+        }
+    } catch (error) {
+        res.status(503).json({
+            status: 'error',
+            ready: false,
+            error: error.message
+        });
+    }
+});
+
+// ===== PAYMENT SYSTEM API ENDPOINTS =====
+
+// Create payment record
+app.post('/api/payments/create', async (req, res) => {
+    try {
+        const { bookingId, amount, currency = 'Som' } = req.body;
+        
+        // Generate transaction ID
+        const transactionId = 'TXN' + Date.now().toString(36).toUpperCase();
+        
+        // Create payment record
+        const payment = {
+            id: transactionId,
+            transaction_id: transactionId,
+            booking_id: bookingId,
+            amount: amount || 5500,
+            currency: currency,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            provider: 'manual',
+            raw_payload: {}
+        };
+        
+        // Save payment to file (in production, use a proper database)
+        const paymentsPath = path.join(__dirname, 'payments.json');
+        let payments = {};
+        
+        if (fs.existsSync(paymentsPath)) {
+            payments = JSON.parse(fs.readFileSync(paymentsPath, 'utf8'));
+        }
+        
+        payments[transactionId] = payment;
+        fs.writeFileSync(paymentsPath, JSON.stringify(payments, null, 2));
+        
+        res.json({
+            success: true,
+            transaction_id: transactionId,
+            status: 'pending',
+            amount: payment.amount,
+            currency: payment.currency
+        });
+        
+    } catch (error) {
+        console.error('Error creating payment:', error);
+        res.status(500).json({ error: 'Error creating payment' });
+    }
+});
+
+// Get payment status
+app.get('/api/payments/:transaction_id/status', (req, res) => {
+    try {
+        const { transaction_id } = req.params;
+        const paymentsPath = path.join(__dirname, 'payments.json');
+        
+        if (!fs.existsSync(paymentsPath)) {
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+        
+        const payments = JSON.parse(fs.readFileSync(paymentsPath, 'utf8'));
+        const payment = payments[transaction_id];
+        
+        if (!payment) {
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+        
+        res.json({
+            transaction_id: transaction_id,
+            status: payment.status,
+            amount: payment.amount,
+            currency: payment.currency,
+            created_at: payment.created_at,
+            updated_at: payment.updated_at
+        });
+        
+    } catch (error) {
+        console.error('Error getting payment status:', error);
+        res.status(500).json({ error: 'Error getting payment status' });
+    }
+});
+
+// Payment webhook (for external payment providers)
+app.post('/api/payments/webhook', async (req, res) => {
+    try {
+        const { transaction_id, status, amount, currency } = req.body;
+        
+        console.log('📞 Payment webhook received:', { transaction_id, status, amount, currency });
+        
+        // Load payments
+        const paymentsPath = path.join(__dirname, 'payments.json');
+        let payments = {};
+        
+        if (fs.existsSync(paymentsPath)) {
+            payments = JSON.parse(fs.readFileSync(paymentsPath, 'utf8'));
+        }
+        
+        const payment = payments[transaction_id];
+        if (!payment) {
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+        
+        // Update payment status
+        payment.status = status;
+        payment.updated_at = new Date().toISOString();
+        payment.raw_payload = req.body;
+        
+        payments[transaction_id] = payment;
+        fs.writeFileSync(paymentsPath, JSON.stringify(payments, null, 2));
+        
+        // If payment is confirmed, update booking status and send ticket
+        if (status === 'confirmed' || status === 'paid') {
+            const bookingId = payment.booking_id;
+            
+            // Load bookings
+            const bookingsPath = path.join(__dirname, 'bookings.json');
+            let bookings = {};
+            
+            if (fs.existsSync(bookingsPath)) {
+                bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+            }
+            
+            const booking = bookings[bookingId];
+            if (booking) {
+                // Update booking status
+                booking.status = 'paid_ru';
+                booking.payment_confirmed_at = new Date().toISOString();
+                booking.transaction_id = transaction_id;
+                
+                bookings[bookingId] = booking;
+                fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+                
+                // Generate and send ticket
+                try {
+                    const ticketId = 'TKT' + Date.now().toString(36).toUpperCase();
+                    const pdfBytes = await generateTicketPDF(booking, ticketId);
+                    const ticketFileName = `ticket_${ticketId}.pdf`;
+                    const ticketPath = path.join(ticketsDir, ticketFileName);
+                    
+                    fs.writeFileSync(ticketPath, pdfBytes);
+                    
+                    // Send WhatsApp ticket
+                    await sendWhatsAppTicket(booking.phone, pdfBytes, ticketId, booking);
+                    
+                    console.log('✅ Payment confirmed and ticket sent for booking:', bookingId);
+                } catch (ticketError) {
+                    console.error('❌ Error generating/sending ticket:', ticketError);
+                }
+            }
+        }
+        
+        res.json({ success: true, message: 'Webhook processed' });
+        
+    } catch (error) {
+        console.error('Error processing payment webhook:', error);
+        res.status(500).json({ error: 'Error processing webhook' });
+    }
+});
+
+// Manual payment confirmation (for admin use)
+app.post('/api/payments/:transaction_id/confirm', async (req, res) => {
+    try {
+        const { transaction_id } = req.params;
+        
+        // Simulate webhook call
+        const webhookData = {
+            transaction_id: transaction_id,
+            status: 'confirmed',
+            amount: 5500,
+            currency: 'Som'
+        };
+        
+        // Call the webhook endpoint internally
+        const webhookReq = {
+            body: webhookData
+        };
+        
+        const webhookRes = {
+            json: (data) => {
+                res.json(data);
+            },
+            status: (code) => ({
+                json: (data) => res.status(code).json(data)
+            })
+        };
+        
+        await app._router.handle(webhookReq, webhookRes, () => {});
+        
+    } catch (error) {
+        console.error('Error confirming payment:', error);
+        res.status(500).json({ error: 'Error confirming payment' });
+    }
+});
+
+// ===== ADMIN FEATURES =====
+
+// Delete ticket (admin only)
+app.delete('/admin/tickets/:ticketId', async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const { adminId = 'admin' } = req.body; // In production, get from auth
+        
+        // Load bookings to find the ticket
+        const bookingsPath = path.join(__dirname, 'bookings.json');
+        let bookings = {};
+        
+        if (fs.existsSync(bookingsPath)) {
+            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+        }
+        
+        // Find booking by ticket ID or booking ID
+        const booking = Object.values(bookings).find(b => 
+            b.id === ticketId || b.ticketId === ticketId
+        );
+        
+        if (!booking) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+        
+        // Log admin action
+        const adminActionsPath = path.join(__dirname, 'admin_actions.json');
+        let adminActions = {};
+        
+        if (fs.existsSync(adminActionsPath)) {
+            adminActions = JSON.parse(fs.readFileSync(adminActionsPath, 'utf8'));
+        }
+        
+        const actionId = 'ACT' + Date.now().toString(36).toUpperCase();
+        const adminAction = {
+            id: actionId,
+            admin_id: adminId,
+            action: 'delete_ticket',
+            ticket_id: ticketId,
+            booking_id: booking.id,
+            timestamp: new Date().toISOString(),
+            details: {
+                customer_name: `${booking.firstName} ${booking.lastName}`,
+                phone: booking.phone,
+                seat: `Table ${booking.table}, Seat ${booking.seat}`,
+                status: booking.status,
+                amount: booking.price
+            }
+        };
+        
+        adminActions[actionId] = adminAction;
+        fs.writeFileSync(adminActionsPath, JSON.stringify(adminActions, null, 2));
+        
+        // Delete the booking
+        delete bookings[booking.id];
+        fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
+        
+        // Emit seat update
+        emitSeatUpdate();
+        
+        res.json({
+            success: true,
+            message: 'Ticket deleted successfully',
+            action_id: actionId,
+            deleted_booking: {
+                id: booking.id,
+                customer: `${booking.firstName} ${booking.lastName}`,
+                seat: `Table ${booking.table}, Seat ${booking.seat}`
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error deleting ticket:', error);
+        res.status(500).json({ error: 'Error deleting ticket' });
+    }
+});
+
+// Get admin actions (audit log)
+app.get('/admin/actions', (req, res) => {
+    try {
+        const adminActionsPath = path.join(__dirname, 'admin_actions.json');
+        
+        if (!fs.existsSync(adminActionsPath)) {
+            return res.json([]);
+        }
+        
+        const adminActions = JSON.parse(fs.readFileSync(adminActionsPath, 'utf8'));
+        const actionsArray = Object.values(adminActions).sort((a, b) => 
+            new Date(b.timestamp) - new Date(a.timestamp)
+        );
+        
+        res.json(actionsArray);
+        
+    } catch (error) {
+        console.error('Error getting admin actions:', error);
+        res.status(500).json({ error: 'Error getting admin actions' });
     }
 });
 
@@ -1780,7 +1801,7 @@ app.get('/api/seat-statuses', (req, res) => {
                 const seatId = `${booking.table}-${booking.seat}`;
                 let status = 'active'; // default
                 
-                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'Оплачен') {
+                if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
                 } else if (booking.status === 'pending') {
                     status = 'pending';
@@ -1918,33 +1939,9 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
     }
 });
 
-// Helper function to check if request is from admin
-function isAdminRequest(req) {
-    // Check for admin role in headers or query params
-    const adminRole = req.headers['x-user-role'] || req.query.role;
-    
-    // Additional security: log admin access attempts
-    if (adminRole === 'admin') {
-        console.log('🔐 Admin access granted to:', req.ip, 'for', req.path);
-    } else {
-        console.log('🚫 Non-admin access denied to:', req.ip, 'for', req.path);
-    }
-    
-    return adminRole === 'admin';
-}
-
-// Test endpoint to manually trigger seat updates (Admin only)
+// Test endpoint to manually trigger seat updates
 app.post('/api/test/emit-seat-update', (req, res) => {
     try {
-        // Check if request is from admin
-        if (!isAdminRequest(req)) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Access denied',
-                message: 'This endpoint is only available to administrators'
-            });
-        }
-        
         console.log('🧪 Manual seat update triggered via API');
         console.log('📊 Current connected clients:', io.engine.clientsCount);
         
@@ -1973,18 +1970,9 @@ app.post('/api/test/emit-seat-update', (req, res) => {
     }
 });
 
-// Test endpoint to check Socket.IO room status (Admin only)
+// Test endpoint to check Socket.IO room status
 app.get('/api/test/socket-status', (req, res) => {
     try {
-        // Check if request is from admin
-        if (!isAdminRequest(req)) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Access denied',
-                message: 'This endpoint is only available to administrators'
-            });
-        }
-        
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
         const adminCount = adminsRoom ? adminsRoom.size : 0;
         
@@ -2010,57 +1998,9 @@ app.get('/api/test/socket-status', (req, res) => {
     }
 });
 
-// Public health check endpoint for Railway
-app.get('/api/health', (req, res) => {
-    try {
-        res.status(200).json({
-            success: true,
-            message: "Server is running",
-            timestamp: new Date().toISOString(),
-            status: "healthy",
-            version: "1.0.1"
-        });
-    } catch (error) {
-        console.error('Error in health check:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Health check failed',
-            details: error.message 
-        });
-    }
-});
-
-// Simple test endpoint
-app.get('/api/test-health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Test health endpoint working",
-        timestamp: new Date().toISOString()
-    });
-});
-
-// Alternative health check endpoint
-app.get('/api/health-check', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Health check endpoint working",
-        timestamp: new Date().toISOString(),
-        status: "healthy"
-    });
-});
-
-// Test endpoint to get Socket.IO connection info (Admin only)
+// Test endpoint to get Socket.IO connection info
 app.get('/api/test/socket-info', (req, res) => {
     try {
-        // Check if request is from admin
-        if (!isAdminRequest(req)) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Access denied',
-                message: 'This endpoint is only available to administrators'
-            });
-        }
-        
         const connectedClients = io.engine.clientsCount;
         
         res.json({
@@ -2078,194 +2018,45 @@ app.get('/api/test/socket-info', (req, res) => {
     }
 });
 
-// Force release paid booking (Admin only)
-app.post('/api/force-release-booking/:bookingId', async (req, res) => {
-    try {
-        // Check if request is from admin
-        if (!isAdminRequest(req)) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Access denied',
-                message: 'This endpoint is only available to administrators'
-            });
-        }
-
-        const { bookingId } = req.params;
-
-        // Find the booking in the database
-        const booking = await Booking.findOne({
-            where: { ticketId: bookingId, isActive: true },
-            include: [{
-                model: Seat,
-                as: 'Seats'
-            }]
-        });
-
-        if (!booking) {
-            return res.status(404).json({
-                success: false,
-                error: 'Booking not found',
-                message: 'Бронирование не найдено'
-            });
-        }
-
-        // Check if booking is actually paid
-        if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'confirmed' && booking.paymentStatus !== 'Оплачен') {
-            return res.status(400).json({
-                success: false,
-                error: 'Booking not paid',
-                message: 'Бронирование не оплачено. Можно освободить только оплаченные места.'
-            });
-        }
-
-        // Store booking data before release for event emission
-        const releasedBooking = {
-            id: booking.ticketId,
-            table: booking.tableNumber,
-            seat: booking.seatNumber,
-            firstName: booking.studentName.split(' ')[0],
-            lastName: booking.studentName.split(' ').slice(1).join(' '),
-            paymentStatus: booking.paymentStatus,
-            previousStatus: booking.paymentStatus
-        };
-
-        // Update booking status to released
-        await booking.update({ 
-            paymentStatus: 'released',
-            isActive: false,
-            releasedAt: new Date(),
-            releasedBy: 'admin'
-        });
-
-        // Update associated seats to available
-        await Seat.update(
-            { status: 'available' },
-            { where: { bookingId: booking.id } }
-        );
-
-        // Delete ticket file if exists
-        if (booking.ticketId) {
-            const ticketPath = path.join(ticketsDir, `${booking.ticketId}.pdf`);
-            if (fs.existsSync(ticketPath)) {
-                fs.unlinkSync(ticketPath);
-            }
-        }
-
-        // Emit booking released event to all admins
-        const adminsRoom = io.sockets.adapter.rooms.get('admins');
-        const adminCount = adminsRoom ? adminsRoom.size : 0;
-
-        io.to('admins').emit('update-seat-status', {
-            type: 'booking-force-released',
-            data: {
-                bookingId: bookingId,
-                table: releasedBooking.table,
-                seat: releasedBooking.seat,
-                status: 'available',
-                firstName: releasedBooking.firstName,
-                lastName: releasedBooking.lastName,
-                previousStatus: releasedBooking.previousStatus,
-                releasedBy: 'admin'
-            },
-            timestamp: Date.now()
-        });
-
-        // Emit individual seat status update
-        const seatId = `${releasedBooking.table}-${releasedBooking.seat}`;
-        io.emit('update-seat-status', {
-            seatId: seatId,
-            status: 'available',
-            timestamp: Date.now()
-        });
-
-        console.log(`📡 Booking force released broadcasted to ${adminCount} admin clients in admins room`);
-
-        // Emit seat update to all connected clients
-        emitSeatUpdate();
-
-        res.json({
-            success: true,
-            message: 'Место принудительно освобождено администратором',
-            data: {
-                bookingId: bookingId,
-                table: releasedBooking.table,
-                seat: releasedBooking.seat,
-                previousStatus: releasedBooking.previousStatus
-            }
-        });
-
-    } catch (error) {
-        console.error('Error force releasing booking:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Ошибка при принудительном освобождении места',
-            details: error.message 
-        });
-    }
-});
-
 // Export for Vercel serverless functions
 module.exports = app;
 
-// Initialize database and start server
-async function startServer() {
-    try {
-        // Initialize database
-        console.log('🔄 Initializing database...');
-        const dbInitialized = await initializeDatabase();
-        
-        if (!dbInitialized) {
-            console.error('❌ Failed to initialize database. Exiting...');
+// Start server with error handling
+server.listen(PORT, '0.0.0.0', (err) => {
+        if (err) {
+            console.error('❌ Failed to start server:', err);
+            if (err.code === 'EADDRINUSE') {
+                console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
+                console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
+                console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
+            }
             process.exit(1);
         }
         
-        console.log('✅ Database initialized successfully');
-        
-        // Start server
-        server.listen(PORT, '0.0.0.0', (err) => {
-            if (err) {
-                console.error('❌ Failed to start server:', err);
-                if (err.code === 'EADDRINUSE') {
-                    console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
-                    console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
-                    console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
-                }
-                process.exit(1);
-            }
-            
-            console.log('🚀 Server started successfully!');
-            console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
-            console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
-            console.log('📱 Admin panel: http://localhost:3000/admin.html');
-            console.log('🎓 Student portal: http://localhost:3000/index.html');
-            console.log('🧪 Test page: http://localhost:3000/socket-test.html');
-            console.log('');
-            console.log('🔐 API Endpoints:');
-            console.log('  POST /api/create-booking - Create new booking');
-            console.log('  POST /api/confirm-payment - Confirm payment');
-            console.log('  DELETE /api/delete-booking/:id - Delete booking');
-            console.log('  GET  /api/seat-statuses - Get seat statuses');
-            console.log('  POST /api/test/emit-seat-update - Test seat update');
-            console.log('  GET  /api/test/socket-info - Socket.IO info');
-            console.log('');
-            console.log('🔌 Socket.IO Events:');
-            console.log('  seatUpdate - Real-time seat status updates');
-            console.log('  connected - Connection confirmation');
-            console.log('  test - Test event');
-            console.log('  requestSeatData - Request current seat data');
-            console.log('  ping/pong - Connection health check');
-            console.log('');
-            console.log('🎯 Ready for real-time seat booking!');
-        });
-        
-    } catch (error) {
-        console.error('❌ Failed to start server:', error);
-        process.exit(1);
-    }
-}
-
-// Start the server
-startServer();
+        console.log('🚀 Server started successfully!');
+        console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
+        console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
+        console.log('📱 Admin panel: http://localhost:3000/admin.html');
+        console.log('🎓 Student portal: http://localhost:3000/index.html');
+        console.log('🧪 Test page: http://localhost:3000/socket-test.html');
+        console.log('');
+        console.log('🔐 API Endpoints:');
+        console.log('  POST /api/create-booking - Create new booking');
+        console.log('  POST /api/confirm-payment - Confirm payment');
+        console.log('  DELETE /api/delete-booking/:id - Delete booking');
+        console.log('  GET  /api/seat-statuses - Get seat statuses');
+        console.log('  POST /api/test/emit-seat-update - Test seat update');
+        console.log('  GET  /api/test/socket-info - Socket.IO info');
+        console.log('');
+        console.log('🔌 Socket.IO Events:');
+        console.log('  seatUpdate - Real-time seat status updates');
+        console.log('  connected - Connection confirmation');
+        console.log('  test - Test event');
+        console.log('  requestSeatData - Request current seat data');
+        console.log('  ping/pong - Connection health check');
+        console.log('');
+        console.log('🎯 Ready for real-time seat booking!');
+    });
 
 // Handle server errors
 server.on('error', (err) => {
