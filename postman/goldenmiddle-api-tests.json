@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "GOLDENMIDDLE API Tests",
+    "description": "API tests for the GOLDENMIDDLE ticketing system with phone-only authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Basic Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Readiness Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health/readiness",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health", "readiness"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment System",
+      "item": [
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{booking_id}}\",\n  \"amount\": 5500,\n  \"currency\": \"Som\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{transaction_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "{{transaction_id}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Payment Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_id\": \"{{transaction_id}}\",\n  \"status\": \"confirmed\",\n  \"amount\": 5500,\n  \"currency\": \"Som\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "webhook"]
+            }
+          }
+        },
+        {
+          "name": "Manual Payment Confirmation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/payments/{{transaction_id}}/confirm",
+              "host": ["{{base_url}}"],
+              "path": ["api", "payments", "{{transaction_id}}", "confirm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "item": [
+        {
+          "name": "Create Booking (Phone Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"phone\": \"+996555123456\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"price\": 5500,\n  \"status\": \"pending\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/create-booking",
+              "host": ["{{base_url}}"],
+              "path": ["api", "create-booking"]
+            }
+          }
+        },
+        {
+          "name": "Get All Bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/bookings",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bookings"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{booking_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/confirm-payment",
+              "host": ["{{base_url}}"],
+              "path": ["api", "confirm-payment"]
+            }
+          }
+        },
+        {
+          "name": "Delete Booking",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/delete-booking/{{booking_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "delete-booking", "{{booking_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Features",
+      "item": [
+        {
+          "name": "Delete Ticket (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminId\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/tickets/{{ticket_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tickets", "{{ticket_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Actions (Audit Log)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/actions",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "actions"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "transaction_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "ticket_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    }
+  ]
+}
