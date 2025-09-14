@@ -8,21 +8,58 @@ const databaseUrl = process.env.DATABASE_URL;
 let sequelize;
 
 if (isProduction && databaseUrl) {
-  // Production: Use PostgreSQL
+  // Production: Use PostgreSQL with improved connection handling
   sequelize = new Sequelize(databaseUrl, {
     dialect: 'postgres',
     logging: false,
     pool: {
-      max: 10,
-      min: 0,
-      acquire: 60000,
-      idle: 10000,
-      evict: 1000
+      max: 5,           // Reduced max connections
+      min: 1,           // Keep at least 1 connection alive
+      acquire: 30000,   // Reduced acquire timeout
+      idle: 20000,      // Increased idle timeout
+      evict: 1000,      // Connection eviction interval
+      handleDisconnects: true, // Handle disconnections gracefully
+      retry: {
+        max: 3,         // Retry failed connections
+        match: [
+          /ETIMEDOUT/,
+          /EHOSTUNREACH/,
+          /ECONNRESET/,
+          /ECONNREFUSED/,
+          /ETIMEDOUT/,
+          /SequelizeConnectionError/,
+          /SequelizeConnectionRefusedError/,
+          /SequelizeHostNotFoundError/,
+          /SequelizeHostNotReachableError/,
+          /SequelizeInvalidConnectionError/,
+          /SequelizeConnectionTimedOutError/
+        ]
+      }
     },
     dialectOptions: {
-      connectTimeout: 60000,
-      acquireTimeout: 60000,
-      timeout: 60000
+      connectTimeout: 30000,    // Reduced connection timeout
+      acquireTimeout: 30000,    // Reduced acquire timeout
+      timeout: 30000,           // Reduced query timeout
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    },
+    retry: {
+      max: 3,
+      match: [
+        /ETIMEDOUT/,
+        /EHOSTUNREACH/,
+        /ECONNRESET/,
+        /ECONNREFUSED/,
+        /ETIMEDOUT/,
+        /SequelizeConnectionError/,
+        /SequelizeConnectionRefusedError/,
+        /SequelizeHostNotFoundError/,
+        /SequelizeHostNotReachableError/,
+        /SequelizeInvalidConnectionError/,
+        /SequelizeConnectionTimedOutError/
+      ]
     }
   });
 } else {

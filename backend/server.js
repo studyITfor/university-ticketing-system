@@ -81,33 +81,57 @@ async function emitSeatUpdate() {
             }
         }
         
-        // Load bookings from database with timeout and fallback
+        // Load bookings from database with improved error handling and retry
         let bookings = [];
-        try {
-            bookings = await Promise.race([
-                Booking.findAll({
-                    where: { isActive: true },
-                    include: [{
-                        model: Seat,
-                        as: 'Seats'
-                    }]
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Database query timeout')), 10000)
-                )
-            ]);
-        } catch (dbError) {
-            console.warn('⚠️ Database query failed, using fallback data:', dbError.message);
+        let dbError = null;
+        
+        // Try database query with retry logic
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`🔄 Database query attempt ${attempt}/3...`);
+                bookings = await Promise.race([
+                    Booking.findAll({
+                        where: { isActive: true },
+                        include: [{
+                            model: Seat,
+                            as: 'Seats'
+                        }]
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Database query timeout')), 15000)
+                    )
+                ]);
+                console.log(`✅ Database query successful on attempt ${attempt}`);
+                break; // Success, exit retry loop
+            } catch (error) {
+                dbError = error;
+                console.warn(`⚠️ Database query attempt ${attempt} failed:`, error.message);
+                
+                if (attempt < 3) {
+                    // Wait before retry
+                    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                }
+            }
+        }
+        
+        // If all database attempts failed, use fallback
+        if (bookings.length === 0 && dbError) {
+            console.warn('⚠️ All database attempts failed, using fallback data:', dbError.message);
             // Fallback to file-based data if database fails
             const bookingsPath = path.join(__dirname, 'bookings.json');
             if (fs.existsSync(bookingsPath)) {
-                const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-                bookings = Object.values(fileBookings).map(booking => ({
-                    tableNumber: booking.table,
-                    seatNumber: booking.seat,
-                    paymentStatus: booking.status,
-                    isActive: true
-                }));
+                try {
+                    const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+                    bookings = Object.values(fileBookings).map(booking => ({
+                        tableNumber: booking.table,
+                        seatNumber: booking.seat,
+                        paymentStatus: booking.status,
+                        isActive: true
+                    }));
+                    console.log(`📁 Loaded ${bookings.length} bookings from fallback file`);
+                } catch (fileError) {
+                    console.error('❌ Failed to load fallback data:', fileError.message);
+                }
             }
         }
         
@@ -984,40 +1008,124 @@ app.post('/api/create-booking', async (req, res) => {
             status: 'pending'
         });
         
-        // Check if seat is already booked (only check for confirmed bookings)
-        const existingBooking = await Booking.findOne({
-            where: {
-                tableNumber: bookingData.table,
-                seatNumber: bookingData.seat,
-                isActive: true,
-                paymentStatus: ['paid', 'confirmed', 'Оплачен', 'prebooked']
+        // Check if seat is already booked with retry logic
+        let existingBooking = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                existingBooking = await Promise.race([
+                    Booking.findOne({
+                        where: {
+                            tableNumber: bookingData.table,
+                            seatNumber: bookingData.seat,
+                            isActive: true,
+                            paymentStatus: ['paid', 'confirmed', 'Оплачен', 'prebooked']
+                        }
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Database query timeout')), 10000)
+                    )
+                ]);
+                break; // Success, exit retry loop
+            } catch (error) {
+                console.warn(`⚠️ Seat check attempt ${attempt} failed:`, error.message);
+                if (attempt < 3) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                }
             }
-        });
+        }
         
         if (existingBooking) {
             return res.status(400).json({ error: 'Место уже забронировано' });
         }
         
-        // Create booking in database
-        const newBooking = await Booking.create({
-            ticketId: bookingId,
-            studentName: `${bookingData.firstName} ${bookingData.lastName}`,
-            studentId: bookingData.studentId || 'N/A',
-            email: bookingData.email || 'no-email@example.com', // Temporary fallback for database compatibility
-            phone: bookingData.phone,
-            tableNumber: bookingData.table,
-            seatNumber: bookingData.seat,
-            paymentStatus: 'pending',
-            bookingTime: new Date()
-        });
+        // Create booking in database with retry logic
+        let newBooking = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`🔄 Creating booking attempt ${attempt}/3...`);
+                newBooking = await Promise.race([
+                    Booking.create({
+                        ticketId: bookingId,
+                        studentName: `${bookingData.firstName} ${bookingData.lastName}`,
+                        studentId: bookingData.studentId || 'N/A',
+                        email: bookingData.email || 'no-email@example.com',
+                        phone: bookingData.phone,
+                        tableNumber: bookingData.table,
+                        seatNumber: bookingData.seat,
+                        paymentStatus: 'pending',
+                        bookingTime: new Date()
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Database create timeout')), 15000)
+                    )
+                ]);
+                console.log(`✅ Booking created successfully on attempt ${attempt}`);
+                break; // Success, exit retry loop
+            } catch (error) {
+                console.warn(`⚠️ Booking creation attempt ${attempt} failed:`, error.message);
+                if (attempt < 3) {
+                    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                } else {
+                    // All attempts failed, use fallback to file storage
+                    console.warn('⚠️ All database attempts failed, using file fallback for booking');
+                    const bookingsPath = path.join(__dirname, 'bookings.json');
+                    let fileBookings = {};
+                    
+                    if (fs.existsSync(bookingsPath)) {
+                        try {
+                            fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+                        } catch (fileError) {
+                            console.error('❌ Failed to read bookings file:', fileError.message);
+                        }
+                    }
+                    
+                    // Add booking to file storage
+                    fileBookings[bookingId] = {
+                        id: bookingId,
+                        firstName: bookingData.firstName,
+                        lastName: bookingData.lastName,
+                        studentId: bookingData.studentId || 'N/A',
+                        phone: bookingData.phone,
+                        table: bookingData.table,
+                        seat: bookingData.seat,
+                        status: 'pending',
+                        timestamp: Date.now()
+                    };
+                    
+                    try {
+                        fs.writeFileSync(bookingsPath, JSON.stringify(fileBookings, null, 2));
+                        console.log(`📁 Booking saved to file fallback: ${bookingId}`);
+                    } catch (fileError) {
+                        console.error('❌ Failed to save booking to file:', fileError.message);
+                        return res.status(500).json({ error: 'Ошибка при создании бронирования' });
+                    }
+                    
+                    // Create a mock booking object for the response
+                    newBooking = {
+                        id: bookingId,
+                        ticketId: bookingId,
+                        tableNumber: bookingData.table,
+                        seatNumber: bookingData.seat
+                    };
+                    break;
+                }
+            }
+        }
         
-        // Create seat record
-        await Seat.create({
-            tableNumber: bookingData.table,
-            seatNumber: bookingData.seat,
-            isOccupied: true,
-            bookingId: newBooking.id
-        });
+        // Create seat record if database booking was successful
+        if (newBooking && newBooking.id) {
+            try {
+                await Seat.create({
+                    tableNumber: bookingData.table,
+                    seatNumber: bookingData.seat,
+                    isOccupied: true,
+                    bookingId: newBooking.id
+                });
+            } catch (seatError) {
+                console.warn('⚠️ Failed to create seat record:', seatError.message);
+                // Continue without seat record - not critical
+            }
+        }
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1499,10 +1607,58 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 // Get bookings
 app.get('/api/bookings', async (req, res) => {
     try {
-        const bookings = await Booking.findAll({
-            where: { isActive: true },
-            order: [['createdAt', 'DESC']]
-        });
+        let bookings = [];
+        let dbError = null;
+        
+        // Try database query with retry logic
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`🔄 Loading bookings attempt ${attempt}/3...`);
+                bookings = await Promise.race([
+                    Booking.findAll({
+                        where: { isActive: true },
+                        order: [['createdAt', 'DESC']]
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Database query timeout')), 15000)
+                    )
+                ]);
+                console.log(`✅ Bookings loaded successfully on attempt ${attempt}`);
+                break; // Success, exit retry loop
+            } catch (error) {
+                dbError = error;
+                console.warn(`⚠️ Load bookings attempt ${attempt} failed:`, error.message);
+                
+                if (attempt < 3) {
+                    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                }
+            }
+        }
+        
+        // If all database attempts failed, use fallback
+        if (bookings.length === 0 && dbError) {
+            console.warn('⚠️ All database attempts failed, using fallback data for bookings');
+            const bookingsPath = path.join(__dirname, 'bookings.json');
+            if (fs.existsSync(bookingsPath)) {
+                try {
+                    const fileBookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
+                    bookings = Object.values(fileBookings).map(booking => ({
+                        ticketId: booking.id,
+                        studentName: `${booking.firstName} ${booking.lastName}`,
+                        studentId: booking.studentId,
+                        phone: booking.phone,
+                        tableNumber: booking.table,
+                        seatNumber: booking.seat,
+                        paymentStatus: booking.status,
+                        bookingTime: new Date(booking.timestamp),
+                        createdAt: new Date(booking.timestamp)
+                    }));
+                    console.log(`📁 Loaded ${bookings.length} bookings from fallback file`);
+                } catch (fileError) {
+                    console.error('❌ Failed to load fallback bookings:', fileError.message);
+                }
+            }
+        }
         
         // Convert to the format expected by the frontend
         const formattedBookings = {};
