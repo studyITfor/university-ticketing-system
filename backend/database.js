@@ -7,7 +7,7 @@ const databaseUrl = process.env.DATABASE_URL;
 
 let sequelize;
 
-if (isProduction && databaseUrl) {
+if (isProduction && databaseUrl && false) { // Temporarily disabled due to connection issues
   // Production: Use PostgreSQL with improved connection handling
   sequelize = new Sequelize(databaseUrl, {
     dialect: 'postgres',
