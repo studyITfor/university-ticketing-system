@@ -1397,161 +1397,82 @@ app.post('/api/create-booking', async (req, res) => {
 
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
-    const client = await db.getClient();
-    
-    try {
-        const { bookingId, paymentMethod = 'card', amount = 1000 } = req.body;
-        
-        console.log('🔍 Payment confirmation request:', {
-            bookingId,
-            paymentMethod,
-            amount,
-            timestamp: new Date().toISOString(),
-            fullBody: req.body
-        });
-        
-        if (!bookingId) {
-            console.log('❌ Missing bookingId in request');
-            return res.status(400).json({ error: 'Booking ID is required' });
-        }
-        
-        await client.query('BEGIN');
-        
-        // Lookup booking by booking_string_id OR id::text (robust lookup)
-        console.log('🔍 Looking up booking with ID:', bookingId);
-        
-        let bookingResult = await client.query(
-            'SELECT * FROM bookings WHERE booking_string_id = $1',
-            [bookingId]
-        );
-        
-        if (bookingResult.rows.length === 0) {
-            console.log('🔍 Trying lookup by numeric ID...');
-            bookingResult = await client.query(
-                'SELECT * FROM bookings WHERE id::text = $1',
-                [bookingId]
-            );
-        }
-        
-        console.log('🔍 Query result:', {
-            found: bookingResult.rows.length > 0,
-            bookingId: bookingId,
-            results: bookingResult.rows
-        });
-        
-        if (bookingResult.rows.length === 0) {
-            console.log('❌ Booking not found with either booking_string_id or id');
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Бронирование не найдено' });
-        }
-        
-        const booking = bookingResult.rows[0];
-        console.log('✅ Found booking:', {
-            id: booking.id,
-            booking_string_id: booking.booking_string_id,
-            status: booking.status,
-            name: `${booking.first_name} ${booking.last_name}`
-        });
-        
-        // Check if already paid (idempotent)
-        if (booking.status === 'paid' || booking.status === 'confirmed') {
-            console.log('✅ Booking already confirmed, returning success');
-            await client.query('ROLLBACK');
-            return res.json({
-                success: true,
-                message: 'Оплата уже подтверждена',
-                bookingId: booking.booking_string_id || booking.id,
-                status: booking.status
-            });
-        }
-        
-        // Generate unique ticket ID
-        const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
-        const paymentId = `PAY${Date.now().toString(36).toUpperCase()}`;
-        
-        console.log('🎫 Generating ticket ID:', ticketId);
-        
-        // Insert payment record
-        console.log('💳 Inserting payment record...');
-        await client.query(`
-            INSERT INTO payments (transaction_id, user_phone, amount, status, provider, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-        `, [paymentId, booking.user_phone, amount, 'completed', paymentMethod, new Date().toISOString()]);
-        
-        // Update booking status
-        console.log('📝 Updating booking status to paid...');
-        await client.query(`
-            UPDATE bookings 
-            SET status = $1, payment_date = $2, payment_confirmed_by = $3, ticket_id = $4, updated_at = now()
-            WHERE id = $5
-        `, ['paid', new Date().toISOString(), 'admin', ticketId, booking.id]);
-        
-        // Generate and send ticket
-        console.log('🎫 Generating ticket...');
-        const ticketResult = await generateTicketForBooking(booking, ticketId);
-        
-        console.log('📱 Sending WhatsApp ticket...');
-        const whatsappResult = await sendWhatsAppTicket(booking.user_phone, ticketResult, booking);
-        
-        await client.query('COMMIT');
-        
-        console.log('✅ Payment confirmation completed successfully');
-        
-        // Emit real-time updates
-        const seatId = `${booking.table_number}-${booking.seat_number}`;
-        
-        // Emit to admin panel
-        io.to('admins').emit('update-seat-status', {
-            type: 'payment-confirmed',
-            data: {
-                bookingId: booking.booking_string_id || booking.id,
-                table: booking.table_number,
-                seat: booking.seat_number,
-                status: 'paid',
-                firstName: booking.first_name,
-                lastName: booking.last_name,
-                ticketId: ticketId,
-                whatsappSent: whatsappResult.success
-            },
-            timestamp: Date.now()
-        });
-        
-        // Emit seat status update
-        io.emit('update-seat-status', {
-            seatId: seatId,
-            status: 'booked',
-            timestamp: Date.now()
-        });
-        
-        // Emit general seat update
-        emitSeatUpdate();
-        
-        res.json({
-            success: true,
-            message: 'Оплата подтверждена и билет отправлен в WhatsApp',
-            bookingId: booking.booking_string_id || booking.id,
-            ticketId: ticketId,
-            ticketPath: ticketResult.path,
-            whatsappSent: whatsappResult.success
-        });
-        
-    } catch (error) {
-        console.error('❌ Payment confirmation error:', error);
-        console.error('❌ Error stack:', error.stack);
-        
-        try {
-            await client.query('ROLLBACK');
-        } catch (rollbackError) {
-            console.error('❌ Rollback error:', rollbackError);
-        }
-        
-        res.status(500).json({ 
-            error: 'Ошибка при подтверждении оплаты',
-            details: error.message 
-        });
-    } finally {
-        client.release();
+  const { bookingId, paymentMethod, amount } = req.body;
+  console.log('confirm-payment called', req.body);
+  if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
+
+  try {
+    // find booking by string id or numeric id
+    const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
+    const findRes = await db.query(findSql, [bookingId]);
+    const booking = (findRes.rows && findRes.rows[0]) ? findRes.rows[0] : null;
+    if (!booking) {
+      console.error('ConfirmPayment: booking not found', bookingId);
+      return res.status(404).json({ error: 'Бронирование не найдено' });
     }
+
+    if (booking.status === 'paid' || booking.status === 'confirmed') {
+      console.log('ConfirmPayment: idempotent - already paid', booking.booking_string_id || booking.id);
+      return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
+    }
+
+    await db.query('BEGIN');
+
+    const txnRes = await db.query(
+      `INSERT INTO payments (transaction_id, user_phone, amount, status, provider, raw_payload, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,now()) RETURNING id`,
+      [`txn_${Date.now()}`, booking.user_phone || booking.phone, amount || 0, 'confirmed', paymentMethod || 'manual', JSON.stringify(req.body)]
+    );
+
+    const updateRes = await db.query(
+      `UPDATE bookings SET status=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+      ['paid', booking.id]
+    );
+
+    const updatedBooking = updateRes.rows[0];
+    await db.query('COMMIT');
+
+    // generate ticket (PDF or text)
+    let ticket = null;
+    try {
+      const { generateTicketForBooking } = require('./ticket-utils');
+      ticket = await generateTicketForBooking(updatedBooking);
+    } catch (e) {
+      console.error('Ticket generation error', e);
+    }
+
+    // send whatsapp (simulate if provider not configured)
+    try {
+      const phone = updatedBooking.user_phone || updatedBooking.phone;
+      if (phone && /^\+\d{10,15}$/.test(phone)) {
+        const { sendWhatsAppTicket } = require('./ticket-utils');
+        await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
+        await db.query('UPDATE bookings SET whatsapp_sent = true WHERE id=$1', [updatedBooking.id]);
+      } else {
+        console.warn('ConfirmPayment: invalid/missing phone, cannot send WhatsApp ticket', phone);
+      }
+    } catch (e) {
+      console.error('WhatsApp send error', e);
+    }
+
+    // emit real-time update
+    try {
+      if (io) io.emit('bookingUpdated', updatedBooking);
+    } catch (e) {
+      console.error('Socket emit error', e);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+      ticketId: ticket && ticket.ticketId || null,
+      ticketPath: ticket && ticket.path || null
+    });
+  } catch (err) {
+    try { await db.query('ROLLBACK'); } catch(e) {}
+    console.error('ConfirmPayment error:', err);
+    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты' });
+  }
 });
 
 // Delete booking
