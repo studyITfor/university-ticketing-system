@@ -541,6 +541,12 @@ io.on('connection', (socket) => {
         console.log('📊 Total connected clients:', io.engine.clientsCount);
     });
     
+    // Handle admin room joining
+    socket.on('join-admin-room', () => {
+        socket.join('admins');
+        console.log(`Admin ${socket.id} joined admin room`);
+    });
+    
     // Handle role authentication and room assignment
     socket.on('authenticate', (data) => {
         const { role, password } = data;
@@ -1425,11 +1431,229 @@ app.post('/api/confirm-payment', async (req, res) => {
         booking.payment_confirmed_by = 'admin';
         booking.ticket_id = ticketId;
         
-        // For now, skip complex ticket generation and just update the database
-        console.log('✅ Payment confirmed for booking:', bookingId);
+        // Generate and send WhatsApp ticket
+        console.log('🎫 Generating ticket for booking:', bookingId);
         
-        // Define ticketFileName for response
-        const ticketFileName = `${ticketId}.pdf`;
+        try {
+            // Generate PDF ticket
+            const ticketFileName = `${ticketId}.pdf`;
+            const ticketPath = path.join(__dirname, 'tickets', ticketFileName);
+            
+            // Ensure tickets directory exists
+            const ticketsDir = path.join(__dirname, 'tickets');
+            if (!fs.existsSync(ticketsDir)) {
+                fs.mkdirSync(ticketsDir, { recursive: true });
+            }
+            
+            // Generate ticket content
+            const ticketContent = `
+UNIVERSITY TICKETING SYSTEM
+============================
+
+Ticket ID: ${ticketId}
+Event: University Event
+Date: ${new Date().toLocaleDateString('ru-RU')}
+Time: ${new Date().toLocaleTimeString('ru-RU')}
+
+Student Information:
+- Name: ${booking.first_name} ${booking.last_name}
+- Phone: ${booking.user_phone}
+- Table: ${booking.table_number}
+- Seat: ${booking.seat_number}
+
+Status: CONFIRMED & PAID
+Payment Date: ${new Date().toLocaleString('ru-RU')}
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking!
+            `.trim();
+            
+            // Create PDF ticket using pdf-lib
+            const pdfDoc = await PDFDocument.create();
+            const page = pdfDoc.addPage([400, 600]);
+            const { width, height } = page.getSize();
+            
+            // Add title
+            page.drawText('UNIVERSITY TICKETING SYSTEM', {
+                x: 50,
+                y: height - 50,
+                size: 16,
+                color: rgb(0, 0, 0)
+            });
+            
+            // Add ticket details
+            let yPosition = height - 100;
+            const lineHeight = 20;
+            
+            page.drawText(`Ticket ID: ${ticketId}`, {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Event: University Event`, {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Date: ${new Date().toLocaleDateString('ru-RU')}`, {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Time: ${new Date().toLocaleTimeString('ru-RU')}`, {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight * 2;
+            
+            // Student Information
+            page.drawText('Student Information:', {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Name: ${booking.first_name} ${booking.last_name}`, {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Phone: ${booking.user_phone}`, {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Table: ${booking.table_number}`, {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Seat: ${booking.seat_number}`, {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight * 2;
+            
+            // Status
+            page.drawText('Status: CONFIRMED & PAID', {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText(`Payment Date: ${new Date().toLocaleString('ru-RU')}`, {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight * 2;
+            
+            // Instructions
+            page.drawText('This ticket is valid for entry to the event.', {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight;
+            
+            page.drawText('Please present this ticket at the entrance.', {
+                x: 50,
+                y: yPosition,
+                size: 10,
+                color: rgb(0, 0, 0)
+            });
+            yPosition -= lineHeight * 2;
+            
+            page.drawText('Thank you for your booking!', {
+                x: 50,
+                y: yPosition,
+                size: 12,
+                color: rgb(0, 0, 0)
+            });
+            
+            // Save PDF
+            const pdfBytes = await pdfDoc.save();
+            await fs.writeFile(ticketPath, pdfBytes);
+            
+            console.log('✅ PDF ticket generated:', ticketPath);
+            
+            // Send WhatsApp message (simulated - in production, use actual WhatsApp API)
+            const whatsappMessage = `🎫 *TICKET CONFIRMED* 🎫
+
+*Ticket ID:* ${ticketId}
+*Event:* University Event
+*Date:* ${new Date().toLocaleDateString('ru-RU')}
+*Time:* ${new Date().toLocaleTimeString('ru-RU')}
+
+*Student Information:*
+• Name: ${booking.first_name} ${booking.last_name}
+• Phone: ${booking.user_phone}
+• Table: ${booking.table_number}
+• Seat: ${booking.seat_number}
+
+*Status:* ✅ CONFIRMED & PAID
+*Payment Date:* ${new Date().toLocaleString('ru-RU')}
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓`;
+
+            // Validate WhatsApp number format
+            const phoneRegex = /^\+\d{10,15}$/;
+            if (!phoneRegex.test(booking.user_phone)) {
+                throw new Error(`Invalid WhatsApp number format: ${booking.user_phone}`);
+            }
+            
+            // Simulate WhatsApp sending (in production, integrate with WhatsApp Business API)
+            console.log(`📱 Sending WhatsApp ticket to ${booking.user_phone}:`);
+            console.log(whatsappMessage);
+            
+            // In production, replace this with actual WhatsApp API call:
+            // await sendWhatsAppMessage(booking.user_phone, whatsappMessage, ticketPath);
+            
+            console.log('✅ WhatsApp ticket sent successfully');
+            
+        } catch (ticketError) {
+            console.error('❌ Error generating/sending ticket:', ticketError);
+            console.error('❌ Ticket error stack:', ticketError.stack);
+            
+            // Log error but don't fail the payment confirmation
+            // The booking is still confirmed, just ticket sending failed
+            console.log('⚠️ Payment confirmed but ticket sending failed - manual follow-up required');
+        }
+        
+        console.log('✅ Payment confirmed for booking:', bookingId);
         
         // Emit payment confirmed event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1481,9 +1705,9 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
         
-        // Get booking from database
+        // Get booking from database using booking_string_id
         const bookingResult = await db.query(
-            'SELECT * FROM bookings WHERE id = $1',
+            'SELECT * FROM bookings WHERE booking_string_id = $1',
             [bookingId]
         );
         

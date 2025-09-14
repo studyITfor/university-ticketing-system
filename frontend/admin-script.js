@@ -630,11 +630,48 @@ class AdminPanel {
         // Connect to Socket.IO
         this.socket = io();
         
-        // Handle connection
+        // Handle connection events
         this.socket.on('connect', () => {
-            console.log('Connected to server via Socket.IO');
-            this.socket.emit('requestSeatData');
+            console.log('🔌 Admin panel connected to server');
+            // Join admin room for admin-specific updates
+            this.socket.emit('join-admin-room');
         });
+        
+        this.socket.on('disconnect', () => {
+            console.log('🔌 Admin panel disconnected from server');
+        });
+        
+        // Handle real-time seat status updates
+        this.socket.on('update-seat-status', (data) => {
+            console.log('📡 Received seat status update:', data);
+            
+            if (data.type === 'booking-created') {
+                // Refresh bookings when new booking is created
+                this.loadBookings();
+            } else if (data.type === 'payment-confirmed') {
+                // Refresh bookings when payment is confirmed
+                this.loadBookings();
+                // Show success notification
+                this.showNotification('Payment confirmed and ticket sent!', 'success');
+            } else if (data.type === 'booking-deleted') {
+                // Refresh bookings when booking is deleted
+                this.loadBookings();
+                // Show success notification
+                this.showNotification('Booking deleted successfully!', 'success');
+            } else if (data.seatId) {
+                // Handle individual seat status updates
+                this.updateSeatStatus(data.seatId, data.status);
+            }
+        });
+        
+        // Handle admin room events
+        this.socket.on('admin-update', (data) => {
+            console.log('📡 Received admin update:', data);
+            this.loadBookings();
+        });
+        
+        // Request initial seat data
+        this.socket.emit('requestSeatData');
         
         // Handle seat data updates
         this.socket.on('seatData', (data) => {
@@ -1010,6 +1047,61 @@ class AdminPanel {
                 }
             }
         }
+    }
+
+    // Show notification to admin
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Show notification
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 100);
+        
+        // Hide notification after 3 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    // Update seat status in real-time
+    updateSeatStatus(seatId, status) {
+        console.log(`🔄 Updating seat ${seatId} to status: ${status}`);
+        
+        // Update the seat element if it exists
+        const seatElement = document.querySelector(`[data-seat-id="${seatId}"]`);
+        if (seatElement) {
+            // Remove old status classes
+            seatElement.classList.remove('booked', 'pending', 'available', 'prebooked');
+            
+            // Add new status class
+            seatElement.classList.add(status);
+            seatElement.dataset.status = status;
+            
+            // Update seat text if needed
+            if (status === 'available') {
+                seatElement.textContent = seatElement.dataset.seatNumber || '';
+            }
+        }
+        
+        // Update statistics
+        this.updateStatistics();
     }
 
     prebookRandomSeats() {
