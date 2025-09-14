@@ -2286,6 +2286,17 @@ app.get('/api/test/socket-info', (req, res) => {
 // Export for Vercel serverless functions
 module.exports = app;
 
+// Global error handlers
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit the process, just log the error
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    // Don't exit the process, just log the error
+});
+
 // Start server with error handling
 async function startServer() {
     try {
