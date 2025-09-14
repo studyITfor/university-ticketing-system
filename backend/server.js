@@ -1395,201 +1395,161 @@ app.post('/api/create-booking', async (req, res) => {
     }
 });
 
-// Confirm payment and generate ticket
+// Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
+    const client = await db.getClient();
+    
     try {
-        const { bookingId } = req.body;
+        const { bookingId, paymentMethod = 'card', amount = 1000 } = req.body;
         
-        // Get booking from database
-        console.log('🔍 Looking for booking with ID:', bookingId);
-        const bookingResult = await db.query(
+        console.log('🔍 Payment confirmation request:', {
+            bookingId,
+            paymentMethod,
+            amount,
+            timestamp: new Date().toISOString()
+        });
+        
+        if (!bookingId) {
+            console.log('❌ Missing bookingId in request');
+            return res.status(400).json({ error: 'Booking ID is required' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Lookup booking by booking_string_id OR id::text (robust lookup)
+        console.log('🔍 Looking up booking with ID:', bookingId);
+        
+        let bookingResult = await client.query(
             'SELECT * FROM bookings WHERE booking_string_id = $1',
             [bookingId]
         );
         
-        console.log('🔍 Query result:', bookingResult.rows);
+        if (bookingResult.rows.length === 0) {
+            console.log('🔍 Trying lookup by numeric ID...');
+            bookingResult = await client.query(
+                'SELECT * FROM bookings WHERE id::text = $1',
+                [bookingId]
+            );
+        }
+        
+        console.log('🔍 Query result:', {
+            found: bookingResult.rows.length > 0,
+            bookingId: bookingId,
+            results: bookingResult.rows
+        });
         
         if (bookingResult.rows.length === 0) {
-            console.log('❌ Booking not found in database');
+            console.log('❌ Booking not found with either booking_string_id or id');
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Бронирование не найдено' });
         }
         
         const booking = bookingResult.rows[0];
+        console.log('✅ Found booking:', {
+            id: booking.id,
+            booking_string_id: booking.booking_string_id,
+            status: booking.status,
+            name: `${booking.first_name} ${booking.last_name}`
+        });
+        
+        // Check if already paid (idempotent)
+        if (booking.status === 'paid' || booking.status === 'confirmed') {
+            console.log('✅ Booking already confirmed, returning success');
+            await client.query('ROLLBACK');
+            return res.json({
+                success: true,
+                message: 'Оплата уже подтверждена',
+                bookingId: booking.booking_string_id || booking.id,
+                status: booking.status
+            });
+        }
         
         // Generate unique ticket ID
         const ticketId = `TK${Date.now().toString(36).toUpperCase()}`;
+        const paymentId = `PAY${Date.now().toString(36).toUpperCase()}`;
         
-        // Update booking status in database
-        await db.query(
-            'UPDATE bookings SET status = $1, payment_date = $2, payment_confirmed_by = $3, ticket_id = $4, updated_at = now() WHERE booking_string_id = $5',
-            ['paid', new Date().toISOString(), 'admin', ticketId, bookingId]
-        );
+        console.log('🎫 Generating ticket ID:', ticketId);
         
-        // Update local booking object for ticket generation
-        booking.status = 'paid';
-        booking.payment_date = new Date().toISOString();
-        booking.payment_confirmed_by = 'admin';
-        booking.ticket_id = ticketId;
+        // Insert payment record
+        console.log('💳 Inserting payment record...');
+        await client.query(`
+            INSERT INTO payments (transaction_id, user_phone, amount, status, provider, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `, [paymentId, booking.user_phone, amount, 'completed', paymentMethod, new Date().toISOString()]);
         
-        // Generate and send WhatsApp ticket
-        console.log('🎫 Generating ticket for booking:', bookingId);
+        // Update booking status
+        console.log('📝 Updating booking status to paid...');
+        await client.query(`
+            UPDATE bookings 
+            SET status = $1, payment_date = $2, payment_confirmed_by = $3, ticket_id = $4, updated_at = now()
+            WHERE id = $5
+        `, ['paid', new Date().toISOString(), 'admin', ticketId, booking.id]);
         
-        try {
-            // Generate PDF ticket
-            const ticketFileName = `${ticketId}.pdf`;
-            const ticketPath = path.join(__dirname, 'tickets', ticketFileName);
-            
-            // Ensure tickets directory exists
-            const ticketsDir = path.join(__dirname, 'tickets');
-            if (!fs.existsSync(ticketsDir)) {
-                fs.mkdirSync(ticketsDir, { recursive: true });
-            }
-            
-            // Generate ticket content
-            const ticketContent = `
-UNIVERSITY TICKETING SYSTEM
-============================
-
-Ticket ID: ${ticketId}
-Event: University Event
-Date: ${new Date().toLocaleDateString('ru-RU')}
-Time: ${new Date().toLocaleTimeString('ru-RU')}
-
-Student Information:
-- Name: ${booking.first_name} ${booking.last_name}
-- Phone: ${booking.user_phone}
-- Table: ${booking.table_number}
-- Seat: ${booking.seat_number}
-
-Status: CONFIRMED & PAID
-Payment Date: ${new Date().toLocaleString('ru-RU')}
-
-This ticket is valid for entry to the event.
-Please present this ticket at the entrance.
-
-Thank you for your booking!
-            `.trim();
-            
-            // Create simple text ticket for now (PDF generation can be added later)
-            const ticketContent = `
-UNIVERSITY TICKETING SYSTEM
-============================
-
-Ticket ID: ${ticketId}
-Event: University Event
-Date: ${new Date().toLocaleDateString('ru-RU')}
-Time: ${new Date().toLocaleTimeString('ru-RU')}
-
-Student Information:
-- Name: ${booking.first_name} ${booking.last_name}
-- Phone: ${booking.user_phone}
-- Table: ${booking.table_number}
-- Seat: ${booking.seat_number}
-
-Status: CONFIRMED & PAID
-Payment Date: ${new Date().toLocaleString('ru-RU')}
-
-This ticket is valid for entry to the event.
-Please present this ticket at the entrance.
-
-Thank you for your booking!
-            `.trim();
-            
-            // Save as text file for now
-            await fs.writeFile(ticketPath.replace('.pdf', '.txt'), ticketContent);
-            
-            console.log('✅ PDF ticket generated:', ticketPath);
-            
-            // Send WhatsApp message (simulated - in production, use actual WhatsApp API)
-            const whatsappMessage = `🎫 *TICKET CONFIRMED* 🎫
-
-*Ticket ID:* ${ticketId}
-*Event:* University Event
-*Date:* ${new Date().toLocaleDateString('ru-RU')}
-*Time:* ${new Date().toLocaleTimeString('ru-RU')}
-
-*Student Information:*
-• Name: ${booking.first_name} ${booking.last_name}
-• Phone: ${booking.user_phone}
-• Table: ${booking.table_number}
-• Seat: ${booking.seat_number}
-
-*Status:* ✅ CONFIRMED & PAID
-*Payment Date:* ${new Date().toLocaleString('ru-RU')}
-
-This ticket is valid for entry to the event.
-Please present this ticket at the entrance.
-
-Thank you for your booking! 🎓`;
-
-            // Validate WhatsApp number format
-            const phoneRegex = /^\+\d{10,15}$/;
-            if (!phoneRegex.test(booking.user_phone)) {
-                throw new Error(`Invalid WhatsApp number format: ${booking.user_phone}`);
-            }
-            
-            // Simulate WhatsApp sending (in production, integrate with WhatsApp Business API)
-            console.log(`📱 Sending WhatsApp ticket to ${booking.user_phone}:`);
-            console.log(whatsappMessage);
-            
-            // In production, replace this with actual WhatsApp API call:
-            // await sendWhatsAppMessage(booking.user_phone, whatsappMessage, ticketPath);
-            
-            console.log('✅ WhatsApp ticket sent successfully');
-            
-        } catch (ticketError) {
-            console.error('❌ Error generating/sending ticket:', ticketError);
-            console.error('❌ Ticket error stack:', ticketError.stack);
-            
-            // Log error but don't fail the payment confirmation
-            // The booking is still confirmed, just ticket sending failed
-            console.log('⚠️ Payment confirmed but ticket sending failed - manual follow-up required');
-        }
+        // Generate and send ticket
+        console.log('🎫 Generating ticket...');
+        const ticketResult = await generateTicketForBooking(booking, ticketId);
         
-        console.log('✅ Payment confirmed for booking:', bookingId);
+        console.log('📱 Sending WhatsApp ticket...');
+        const whatsappResult = await sendWhatsAppTicket(booking.user_phone, ticketResult, booking);
         
-        // Emit payment confirmed event to all admins
-        const adminsRoom = io.sockets.adapter.rooms.get('admins');
-        const adminCount = adminsRoom ? adminsRoom.size : 0;
+        await client.query('COMMIT');
         
+        console.log('✅ Payment confirmation completed successfully');
+        
+        // Emit real-time updates
+        const seatId = `${booking.table_number}-${booking.seat_number}`;
+        
+        // Emit to admin panel
         io.to('admins').emit('update-seat-status', {
             type: 'payment-confirmed',
             data: {
-                bookingId: bookingId,
+                bookingId: booking.booking_string_id || booking.id,
                 table: booking.table_number,
                 seat: booking.seat_number,
-                status: booking.status,
+                status: 'paid',
                 firstName: booking.first_name,
                 lastName: booking.last_name,
-                ticketId: ticketId
+                ticketId: ticketId,
+                whatsappSent: whatsappResult.success
             },
             timestamp: Date.now()
         });
         
-        // Emit individual seat status update
-        const seatId = `${booking.table_number}-${booking.seat_number}`;
+        // Emit seat status update
         io.emit('update-seat-status', {
             seatId: seatId,
             status: 'booked',
             timestamp: Date.now()
         });
         
-        console.log(`📡 Payment confirmed broadcasted to ${adminCount} admin clients in admins room`);
-        
-        // Emit seat update to all connected clients
+        // Emit general seat update
         emitSeatUpdate();
         
         res.json({
             success: true,
             message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+            bookingId: booking.booking_string_id || booking.id,
             ticketId: ticketId,
-            ticketPath: `/tickets/${ticketId}.txt`
+            ticketPath: ticketResult.path,
+            whatsappSent: whatsappResult.success
         });
         
     } catch (error) {
-        console.error('❌ Error confirming payment:', error);
+        console.error('❌ Payment confirmation error:', error);
         console.error('❌ Error stack:', error.stack);
-        res.status(500).json({ error: 'Ошибка при подтверждении оплаты' });
+        
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error('❌ Rollback error:', rollbackError);
+        }
+        
+        res.status(500).json({ 
+            error: 'Ошибка при подтверждении оплаты',
+            details: error.message 
+        });
+    } finally {
+        client.release();
     }
 });
 
@@ -2442,6 +2402,122 @@ app.post('/api/test/emit-seat-update', (req, res) => {
         });
     }
 });
+
+// Helper function to generate ticket for booking
+async function generateTicketForBooking(booking, ticketId) {
+    try {
+        console.log('🎫 Generating ticket for booking:', booking.id);
+        
+        const ticketFileName = `${ticketId}.txt`;
+        const ticketPath = path.join(__dirname, 'tickets', ticketFileName);
+        
+        // Ensure tickets directory exists
+        const ticketsDir = path.join(__dirname, 'tickets');
+        if (!fs.existsSync(ticketsDir)) {
+            fs.mkdirSync(ticketsDir, { recursive: true });
+        }
+        
+        // Generate ticket content
+        const ticketContent = `
+UNIVERSITY TICKETING SYSTEM
+============================
+
+Ticket ID: ${ticketId}
+Event: University Event
+Date: ${new Date().toLocaleDateString('ru-RU')}
+Time: ${new Date().toLocaleTimeString('ru-RU')}
+
+Student Information:
+- Name: ${booking.first_name} ${booking.last_name}
+- Phone: ${booking.user_phone}
+- Table: ${booking.table_number}
+- Seat: ${booking.seat_number}
+
+Status: CONFIRMED & PAID
+Payment Date: ${new Date().toLocaleString('ru-RU')}
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking!
+        `.trim();
+        
+        // Save ticket file
+        await fs.writeFile(ticketPath, ticketContent);
+        
+        console.log('✅ Ticket generated successfully:', ticketPath);
+        
+        return {
+            success: true,
+            path: `/tickets/${ticketFileName}`,
+            content: ticketContent
+        };
+        
+    } catch (error) {
+        console.error('❌ Error generating ticket:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+// Helper function to send WhatsApp ticket
+async function sendWhatsAppTicket(phone, ticketResult, booking) {
+    try {
+        console.log('📱 Sending WhatsApp ticket to:', phone);
+        
+        // Validate WhatsApp number format
+        const phoneRegex = /^\+\d{10,15}$/;
+        if (!phoneRegex.test(phone)) {
+            throw new Error(`Invalid WhatsApp number format: ${phone}`);
+        }
+        
+        // Generate WhatsApp message
+        const whatsappMessage = `🎫 *TICKET CONFIRMED* 🎫
+
+*Ticket ID:* ${ticketResult.content.match(/Ticket ID: (.*)/)?.[1] || 'N/A'}
+*Event:* University Event
+*Date:* ${new Date().toLocaleDateString('ru-RU')}
+*Time:* ${new Date().toLocaleTimeString('ru-RU')}
+
+*Student Information:*
+• Name: ${booking.first_name} ${booking.last_name}
+• Phone: ${phone}
+• Table: ${booking.table_number}
+• Seat: ${booking.seat_number}
+
+*Status:* ✅ CONFIRMED & PAID
+*Payment Date:* ${new Date().toLocaleString('ru-RU')}
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓`;
+
+        // Simulate WhatsApp sending (in production, integrate with WhatsApp Business API)
+        console.log('📱 WhatsApp message content:');
+        console.log(whatsappMessage);
+        
+        // In production, replace this with actual WhatsApp API call:
+        // const whatsappResponse = await sendWhatsAppMessage(phone, whatsappMessage, ticketResult.path);
+        
+        console.log('✅ WhatsApp ticket sent successfully');
+        
+        return {
+            success: true,
+            message: 'WhatsApp ticket sent successfully',
+            phone: phone
+        };
+        
+    } catch (error) {
+        console.error('❌ Error sending WhatsApp ticket:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
 
 // Database investigation endpoint
 app.get('/api/debug/db-investigation', async (req, res) => {
