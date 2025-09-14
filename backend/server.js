@@ -1470,140 +1470,33 @@ Please present this ticket at the entrance.
 Thank you for your booking!
             `.trim();
             
-            // Create PDF ticket using pdf-lib
-            const pdfDoc = await PDFDocument.create();
-            const page = pdfDoc.addPage([400, 600]);
-            const { width, height } = page.getSize();
+            // Create simple text ticket for now (PDF generation can be added later)
+            const ticketContent = `
+UNIVERSITY TICKETING SYSTEM
+============================
+
+Ticket ID: ${ticketId}
+Event: University Event
+Date: ${new Date().toLocaleDateString('ru-RU')}
+Time: ${new Date().toLocaleTimeString('ru-RU')}
+
+Student Information:
+- Name: ${booking.first_name} ${booking.last_name}
+- Phone: ${booking.user_phone}
+- Table: ${booking.table_number}
+- Seat: ${booking.seat_number}
+
+Status: CONFIRMED & PAID
+Payment Date: ${new Date().toLocaleString('ru-RU')}
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking!
+            `.trim();
             
-            // Add title
-            page.drawText('UNIVERSITY TICKETING SYSTEM', {
-                x: 50,
-                y: height - 50,
-                size: 16,
-                color: rgb(0, 0, 0)
-            });
-            
-            // Add ticket details
-            let yPosition = height - 100;
-            const lineHeight = 20;
-            
-            page.drawText(`Ticket ID: ${ticketId}`, {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Event: University Event`, {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Date: ${new Date().toLocaleDateString('ru-RU')}`, {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Time: ${new Date().toLocaleTimeString('ru-RU')}`, {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight * 2;
-            
-            // Student Information
-            page.drawText('Student Information:', {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Name: ${booking.first_name} ${booking.last_name}`, {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Phone: ${booking.user_phone}`, {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Table: ${booking.table_number}`, {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Seat: ${booking.seat_number}`, {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight * 2;
-            
-            // Status
-            page.drawText('Status: CONFIRMED & PAID', {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText(`Payment Date: ${new Date().toLocaleString('ru-RU')}`, {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight * 2;
-            
-            // Instructions
-            page.drawText('This ticket is valid for entry to the event.', {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight;
-            
-            page.drawText('Please present this ticket at the entrance.', {
-                x: 50,
-                y: yPosition,
-                size: 10,
-                color: rgb(0, 0, 0)
-            });
-            yPosition -= lineHeight * 2;
-            
-            page.drawText('Thank you for your booking!', {
-                x: 50,
-                y: yPosition,
-                size: 12,
-                color: rgb(0, 0, 0)
-            });
-            
-            // Save PDF
-            const pdfBytes = await pdfDoc.save();
-            await fs.writeFile(ticketPath, pdfBytes);
+            // Save as text file for now
+            await fs.writeFile(ticketPath.replace('.pdf', '.txt'), ticketContent);
             
             console.log('✅ PDF ticket generated:', ticketPath);
             
@@ -1690,7 +1583,7 @@ Thank you for your booking! 🎓`;
             success: true,
             message: 'Оплата подтверждена и билет отправлен в WhatsApp',
             ticketId: ticketId,
-            ticketPath: `/tickets/${ticketFileName}`
+            ticketPath: `/tickets/${ticketId}.txt`
         });
         
     } catch (error) {
