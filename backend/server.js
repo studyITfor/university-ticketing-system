@@ -1406,7 +1406,8 @@ app.post('/api/confirm-payment', async (req, res) => {
             bookingId,
             paymentMethod,
             amount,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            fullBody: req.body
         });
         
         if (!bookingId) {
