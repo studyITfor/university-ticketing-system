@@ -1403,7 +1403,7 @@ app.post('/api/confirm-payment', async (req, res) => {
         // Get booking from database
         console.log('🔍 Looking for booking with ID:', bookingId);
         const bookingResult = await db.query(
-            'SELECT b.*, u.phone FROM bookings b JOIN users u ON b.user_phone = u.phone WHERE b.booking_string_id = $1',
+            'SELECT * FROM bookings WHERE booking_string_id = $1',
             [bookingId]
         );
         
