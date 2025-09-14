@@ -14,6 +14,7 @@ async function create() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
       id SERIAL PRIMARY KEY,
+      booking_string_id VARCHAR(50) UNIQUE,
       user_phone VARCHAR(20) NOT NULL,
       event_id INT NOT NULL,
       seat VARCHAR(50) NOT NULL,
