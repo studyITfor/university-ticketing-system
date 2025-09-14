@@ -92,6 +92,8 @@ const secureTicketSystem = new SecureTicketSystem(
 // Initialize database
 async function initializeApp() {
     try {
+        console.log('🔍 Starting database initialization...');
+        
         // Run migration to create tables
         const { pool } = require('./database');
         
@@ -100,6 +102,8 @@ async function initializeApp() {
             console.log('⚠️ Skipping database initialization - no DATABASE_URL provided');
             return;
         }
+        
+        console.log('✅ Database pool available, creating tables...');
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -154,8 +158,15 @@ async function initializeApp() {
         `);
 
         console.log('✅ Database tables created successfully');
+        
+        // Test database connection
+        const testResult = await pool.query('SELECT NOW()');
+        console.log('✅ Database connection test successful:', testResult.rows[0]);
+        
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
+        console.error('❌ Error details:', error.message);
+        console.error('❌ Error stack:', error.stack);
         process.exit(1);
     }
 }
@@ -1174,7 +1185,10 @@ app.post('/api/create-booking', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error creating booking:', error);
+        console.error('❌ Error creating booking:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        console.error('❌ Booking data that failed:', bookingData);
         res.status(500).json({ error: 'Ошибка при создании бронирования' });
     }
 });
