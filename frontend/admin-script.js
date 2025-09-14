@@ -664,6 +664,24 @@ class AdminPanel {
             }
         });
         
+        // Handle booking updates (from payment confirmation)
+        this.socket.on('bookingUpdated', (booking) => {
+            console.log('📡 Received booking update:', booking);
+            // Refresh bookings to show updated status
+            this.loadBookings();
+            // Show notification
+            this.showNotification(`Booking ${booking.booking_string_id || booking.id} confirmed!`, 'success');
+        });
+        
+        // Handle booking deletions
+        this.socket.on('bookingDeleted', (seatId) => {
+            console.log('📡 Received booking deletion:', seatId);
+            // Refresh bookings and update seat status
+            this.loadBookings();
+            this.updateSeatStatus(seatId, 'available');
+            this.showNotification('Booking deleted successfully!', 'success');
+        });
+        
         // Handle admin room events
         this.socket.on('admin-update', (data) => {
             console.log('📡 Received admin update:', data);
