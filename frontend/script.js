@@ -236,6 +236,22 @@ class StudentTicketingSystem {
                 }
             });
         });
+
+        // WhatsApp opt-in confirmation modal event listeners
+        document.getElementById('confirmOptin')?.addEventListener('click', () => {
+            this.confirmOptIn();
+        });
+
+        document.getElementById('resendCode')?.addEventListener('click', () => {
+            this.resendConfirmationCode();
+        });
+
+        document.getElementById('closeConfirmationCodeModal')?.addEventListener('click', () => {
+            this.hideModal('confirmationCodeModal');
+        });
+
+        // Initialize phone display update for opt-in text
+        this.updateOptInPhoneDisplay();
     }
 
     generateHallLayout() {
@@ -346,6 +362,7 @@ class StudentTicketingSystem {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
             phone: formData.get('phone'),
+            whatsappOptin: formData.get('whatsappOptin') === 'on',
             // email removed - phone-only authentication
             seatId: this.currentBookingSeat,
             table: this.currentBookingSeat.split('-')[0],
@@ -365,6 +382,11 @@ class StudentTicketingSystem {
         }
 
         try {
+            // Handle WhatsApp opt-in if checked
+            if (bookingData.whatsappOptin) {
+                await this.handleWhatsAppOptIn(bookingData);
+            }
+            
             // Store temporary booking data for payment confirmation
             // DON'T save to server yet - only after payment confirmation
             this.tempBookingData = bookingData;
@@ -1865,6 +1887,156 @@ Socket.IO Diagnostics:
         } catch (error) {
             console.error('Error checking for seat updates:', error);
             // Don't show error to user as this is a background operation
+        }
+    }
+
+    // WhatsApp Opt-in Methods
+    async handleWhatsAppOptIn(bookingData) {
+        try {
+            console.log('📱 Handling WhatsApp opt-in for:', bookingData.phone);
+            
+            // Update phone display in opt-in text
+            document.getElementById('optinPhoneDisplay').textContent = bookingData.phone;
+            
+            // Call opt-in API
+            const response = await fetch('/api/optin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: bookingData.firstName,
+                    surname: bookingData.lastName,
+                    phone: bookingData.phone,
+                    optin_source: 'booking_form',
+                    booking_id: null // Will be set after booking is created
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ WhatsApp opt-in initiated successfully');
+                // Show confirmation modal
+                this.showConfirmationCodeModal(bookingData.phone);
+            } else {
+                console.error('❌ WhatsApp opt-in failed:', result.error);
+                this.showOptInMessage('error', 'Ошибка при отправке кода подтверждения: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ WhatsApp opt-in error:', error);
+            this.showOptInMessage('error', 'Ошибка при обработке подписки на WhatsApp');
+        }
+    }
+
+    showConfirmationCodeModal(phone) {
+        document.getElementById('confirmationPhone').textContent = phone;
+        document.getElementById('confirmationCode').value = '';
+        document.getElementById('confirmationMessage').style.display = 'none';
+        this.showModal('confirmationCodeModal');
+    }
+
+    async confirmOptIn() {
+        const phone = document.getElementById('confirmationPhone').textContent;
+        const code = document.getElementById('confirmationCode').value;
+        
+        if (!code || code.length !== 6) {
+            this.showConfirmationMessage('error', 'Пожалуйста, введите 6-значный код подтверждения');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/confirm-optin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    phone: phone,
+                    code: code
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showConfirmationMessage('success', 'Подписка на WhatsApp подтверждена!');
+                setTimeout(() => {
+                    this.hideModal('confirmationCodeModal');
+                }, 2000);
+            } else {
+                this.showConfirmationMessage('error', 'Неверный код подтверждения. Попробуйте еще раз.');
+            }
+        } catch (error) {
+            console.error('❌ Confirm opt-in error:', error);
+            this.showConfirmationMessage('error', 'Ошибка при подтверждении подписки');
+        }
+    }
+
+    async resendConfirmationCode() {
+        const phone = document.getElementById('confirmationPhone').textContent;
+        
+        try {
+            const response = await fetch('/api/optin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: this.tempBookingData.firstName,
+                    surname: this.tempBookingData.lastName,
+                    phone: phone,
+                    optin_source: 'booking_form'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showConfirmationMessage('success', 'Код подтверждения отправлен повторно');
+            } else {
+                this.showConfirmationMessage('error', 'Ошибка при повторной отправке кода');
+            }
+        } catch (error) {
+            console.error('❌ Resend code error:', error);
+            this.showConfirmationMessage('error', 'Ошибка при повторной отправке кода');
+        }
+    }
+
+    showConfirmationMessage(type, message) {
+        const messageEl = document.getElementById('confirmationMessage');
+        messageEl.className = `optin-message ${type}`;
+        messageEl.textContent = message;
+        messageEl.style.display = 'block';
+    }
+
+    showOptInMessage(type, message) {
+        // Create a temporary message element
+        const messageEl = document.createElement('div');
+        messageEl.className = `optin-message ${type}`;
+        messageEl.textContent = message;
+        
+        // Insert after the booking form
+        const form = document.getElementById('bookingForm');
+        form.parentNode.insertBefore(messageEl, form.nextSibling);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (messageEl.parentNode) {
+                messageEl.parentNode.removeChild(messageEl);
+            }
+        }, 5000);
+    }
+
+    // Update phone display in opt-in text when phone input changes
+    updateOptInPhoneDisplay() {
+        const phoneInput = document.getElementById('phone');
+        const optinPhoneDisplay = document.getElementById('optinPhoneDisplay');
+        
+        if (phoneInput && optinPhoneDisplay) {
+            phoneInput.addEventListener('input', () => {
+                optinPhoneDisplay.textContent = phoneInput.value || '+XXX';
+            });
         }
     }
 

@@ -192,7 +192,17 @@
                         </div>
                         <div class="form-group">
                             <label for="phone">WhatsApp Number *</label>
-                            <input type="tel" id="phone" name="phone" placeholder="+1234567890" value="+" required>
+                            <input type="tel" id="phone" name="phone" placeholder="+<countrycode><number>" value="+" required pattern="^\+\d{10,15}$" title="Please enter phone number in E.164 format (+countrycode number)">
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="whatsappOptin" name="whatsappOptin" required>
+                                <span class="checkbox-text">
+                                    Я согласен(а) получать уведомления о бронировании, напоминания и билет(ы) в WhatsApp от GOLDENMIDDLE на номер <span id="optinPhoneDisplay">+XXX</span>. 
+                                    <a href="#" onclick="alert('Политика конфиденциальности будет добавлена позже')">Политика конфиденциальности</a> — (link). 
+                                    Отписаться можно, ответив STOP.
+                                </span>
+                            </label>
                         </div>
                         <!-- Email field removed - phone-only authentication -->
                         <div class="form-actions">
@@ -269,6 +279,28 @@
                 </div>
                 <div class="confirmation-actions">
                     <button class="btn btn-primary" id="closeConfirmation">Понятно</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WhatsApp Confirmation Code Modal -->
+    <div class="modal confirmation-code-modal" id="confirmationCodeModal">
+        <div class="modal-content confirmation-code-content">
+            <div class="modal-header">
+                <h3>Подтверждение WhatsApp</h3>
+                <button class="close-btn" id="closeConfirmationCodeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Мы отправили код подтверждения на ваш WhatsApp номер <span id="confirmationPhone"></span></p>
+                <p>Введите код подтверждения:</p>
+                <input type="text" id="confirmationCode" placeholder="123456" maxlength="6" pattern="[0-9]{6}">
+                <div class="optin-message" id="confirmationMessage" style="display: none;"></div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" id="confirmOptin">Подтвердить</button>
+                    <button class="btn btn-secondary" id="resendCode">Отправить код повторно</button>
                 </div>
             </div>
         </div>

@@ -13,6 +13,7 @@ const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
+const WhatsAppService = require('./whatsapp-service');
 
 const app = express();
 const server = createServer(app);
@@ -34,6 +35,31 @@ const io = new Server(server, {
 app.set('io', io);
 
 const PORT = process.env.PORT || config.server.port || 3000;
+
+// Initialize WhatsApp service
+const whatsappService = new WhatsAppService();
+
+// Utility functions
+function validateE164Phone(phone) {
+  const e164Regex = /^\+[1-9]\d{1,14}$/;
+  return e164Regex.test(phone);
+}
+
+function normalizePhone(phone) {
+  // Remove all non-digit characters except +
+  let normalized = phone.replace(/[^\d+]/g, '');
+  
+  // If it doesn't start with +, add it
+  if (!normalized.startsWith('+')) {
+    normalized = '+' + normalized;
+  }
+  
+  return normalized;
+}
+
+function generateConfirmationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // Middleware
 app.use(cors());
@@ -2061,6 +2087,193 @@ app.post('/api/payments/:transaction_id/confirm', async (req, res) => {
         res.status(500).json({ error: 'Error confirming payment' });
     }
 });
+
+// ===== WHATSAPP OPT-IN API ENDPOINTS =====
+
+// Opt-in endpoint - user agrees to receive WhatsApp notifications
+app.post('/api/optin', async (req, res) => {
+  try {
+    const { name, surname, phone, optin_source = 'booking_form', booking_id = null } = req.body;
+    
+    if (!name || !surname || !phone) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: name, surname, phone' 
+      });
+    }
+    
+    // Normalize and validate phone number
+    const normalizedPhone = normalizePhone(phone);
+    if (!validateE164Phone(normalizedPhone)) {
+      return res.status(400).json({ 
+        error: 'Invalid phone number format. Please use E.164 format (+countrycode number)' 
+      });
+    }
+    
+    // Generate confirmation code
+    const confirmationCode = generateConfirmationCode();
+    
+    // Get client IP and user agent
+    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
+    const userAgent = req.headers['user-agent'];
+    
+    // Store consent text (this would be the exact text shown to user)
+    const consentText = `Я согласен(а) получать уведомления о бронировании, напоминания и билет(ы) в WhatsApp от GOLDENMIDDLE на номер ${normalizedPhone}. Политика конфиденциальности — (link). Отписаться можно, ответив STOP.`;
+    
+    // Upsert opt-in record
+    await db.query(`
+      INSERT INTO opt_ins (phone, phone_normalized, name, confirmed, confirmation_code, optin_source, ip_address, user_agent, consent_text, booking_id, last_sent_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+      ON CONFLICT (phone) 
+      DO UPDATE SET 
+        name = EXCLUDED.name,
+        confirmation_code = EXCLUDED.confirmation_code,
+        confirmed = false,
+        optin_source = EXCLUDED.optin_source,
+        ip_address = EXCLUDED.ip_address,
+        user_agent = EXCLUDED.user_agent,
+        consent_text = EXCLUDED.consent_text,
+        booking_id = EXCLUDED.booking_id,
+        last_sent_at = now(),
+        unsubscribed = false,
+        unsubscribed_at = NULL
+    `, [normalizedPhone, normalizedPhone, `${name} ${surname}`, false, confirmationCode, optin_source, ipAddress, userAgent, consentText, booking_id]);
+    
+    // Send confirmation code via WhatsApp
+    const sendResult = await whatsappService.sendConfirmationCode(normalizedPhone, confirmationCode, name);
+    
+    if (!sendResult.success) {
+      console.error('Failed to send WhatsApp confirmation:', sendResult.error);
+      return res.status(500).json({ 
+        error: 'Failed to send confirmation code. Please try again.' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Confirmation code sent to WhatsApp',
+      phone: normalizedPhone
+    });
+    
+  } catch (error) {
+    console.error('Opt-in error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message 
+    });
+  }
+});
+
+// Confirm opt-in endpoint - user enters confirmation code
+app.post('/api/confirm-optin', async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    
+    if (!phone || !code) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: phone, code' 
+      });
+    }
+    
+    const normalizedPhone = normalizePhone(phone);
+    
+    // Find opt-in record
+    const result = await db.query(`
+      SELECT * FROM opt_ins 
+      WHERE phone = $1 AND confirmation_code = $2 AND confirmed = false
+    `, [normalizedPhone, code]);
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ 
+        error: 'Invalid confirmation code or phone number' 
+      });
+    }
+    
+    // Mark as confirmed
+    await db.query(`
+      UPDATE opt_ins 
+      SET confirmed = true, confirmed_at = now() 
+      WHERE phone = $1 AND confirmation_code = $2
+    `, [normalizedPhone, code]);
+    
+    res.json({
+      success: true,
+      message: 'Opt-in confirmed successfully'
+    });
+    
+  } catch (error) {
+    console.error('Confirm opt-in error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message 
+    });
+  }
+});
+
+// WhatsApp webhook endpoint - handle incoming messages (STOP, etc.)
+app.post('/webhook/whatsapp-inbound', async (req, res) => {
+  try {
+    let phone, body;
+    
+    // Handle different webhook formats (Twilio vs Green API)
+    if (req.body.From) {
+      // Twilio format
+      phone = req.body.From.replace('whatsapp:', '');
+      body = req.body.Body;
+    } else if (req.body.senderData) {
+      // Green API format
+      phone = req.body.senderData.sender.replace('@c.us', '');
+      body = req.body.messageData.textMessageData?.textMessage || '';
+    } else {
+      return res.status(400).json({ error: 'Invalid webhook format' });
+    }
+    
+    const result = await whatsappService.handleIncomingMessage(phone, body);
+    
+    res.json({
+      success: true,
+      action: result.action
+    });
+    
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message 
+    });
+  }
+});
+
+// Send ticket if user is confirmed (internal function)
+async function sendTicketIfConfirmed(phone, ticketUrl, bookingDetails) {
+  try {
+    // Check if user is confirmed and not unsubscribed
+    const result = await db.query(`
+      SELECT confirmed, unsubscribed FROM opt_ins 
+      WHERE phone = $1
+    `, [phone]);
+    
+    if (result.rows.length === 0 || !result.rows[0].confirmed || result.rows[0].unsubscribed) {
+      console.log(`User ${phone} not confirmed or unsubscribed, skipping ticket send`);
+      return { success: false, reason: 'not_confirmed_or_unsubscribed' };
+    }
+    
+    // Send ticket
+    const sendResult = await whatsappService.sendTicket(phone, ticketUrl, bookingDetails);
+    
+    if (sendResult.success) {
+      // Update last_sent_at
+      await db.query(`
+        UPDATE opt_ins SET last_sent_at = now() WHERE phone = $1
+      `, [phone]);
+    }
+    
+    return sendResult;
+    
+  } catch (error) {
+    console.error('Send ticket error:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 // ===== ADMIN FEATURES =====
 
