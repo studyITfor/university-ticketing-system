@@ -7,6 +7,13 @@ async function runMigrations() {
   try {
     console.log('🔄 Starting database migrations...');
     
+    // Check if we have a real database connection
+    if (!pool) {
+      console.log('⚠️  No database connection available - migrations skipped');
+      console.log('   Set DATABASE_URL environment variable to run migrations');
+      return;
+    }
+    
     // Check if migrations table exists
     await pool.query(`
       CREATE TABLE IF NOT EXISTS migrations (
