@@ -213,7 +213,7 @@ body {
 
 .table-area {
     position: absolute;
-    border: 2px solid transparent;
+    border: 2px solid #667eea;
     border-radius: 50%;
     cursor: pointer;
     pointer-events: all;
@@ -223,12 +223,14 @@ body {
     justify-content: center;
     font-weight: bold;
     font-size: 0.8rem;
-    color: #333;
-    background: rgba(255, 255, 255, 0.8);
+    color: transparent; /* Hide text content */
+    background: rgba(102, 126, 234, 0.1);
     backdrop-filter: blur(2px);
     min-width: 30px;
     min-height: 30px;
     z-index: 10;
+    /* Add subtle shadow to make areas more visible */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .table-area:hover {
@@ -936,6 +938,8 @@ body {
         min-width: 25px;
         min-height: 25px;
         font-size: 0.7rem;
+        color: transparent; /* Hide text content on mobile too */
+        border-width: 1px; /* Thinner border on mobile */
     }
     
     .interactive-seating-plan {

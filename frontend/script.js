@@ -2091,7 +2091,8 @@ function initializeSeatingPlanImage() {
             tableArea.style.top = `${pos.y}%`;
             tableArea.style.width = `${pos.width}px`;
             tableArea.style.height = `${pos.height}px`;
-            tableArea.textContent = pos.tableNumber;
+            // Hide seat numbers - only show table areas for selection
+            // tableArea.textContent = pos.tableNumber;
             tableArea.dataset.table = pos.tableNumber;
             tableArea.dataset.seat = pos.seatNumber;
             
