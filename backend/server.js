@@ -708,6 +708,13 @@ io.on('connection', (socket) => {
         socket.emit('pong', { timestamp: Date.now() });
     });
     
+    // Handle booking status updates (for real-time updates)
+    socket.on('booking.updated', (data) => {
+        console.log('📡 Booking update event received:', data);
+        // Broadcast to all clients
+        socket.broadcast.emit('booking.updated', data);
+    });
+    
     // Handle booking creation events (broadcast to all admins)
     socket.on('booking-created', (data) => {
         console.log('📡 Booking created event received:', data);
@@ -1370,11 +1377,29 @@ app.post('/api/create-booking', async (req, res) => {
             [bookingData.phone, 'user']
         );
         
-        // Save booking to database with pending status (requires manual admin confirmation)
-        const result = await db.query(
-            'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            [bookingId, bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 'pending']
-        );
+        // Save booking to database with selected status (client selected, not paid yet)
+        const result = await db.query(`
+            INSERT INTO bookings (
+                booking_string_id, user_phone, event_id, seat, table_number, seat_number, 
+                first_name, last_name, status, booking_status, price, paid_by_client
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+            RETURNING *
+        `, [
+            bookingId, bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, 
+            bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 
+            'pending', 'selected', 5500.00, false
+        ]);
+        
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: result.rows[0].id,
+            tableId: bookingData.table,
+            seatId: `${bookingData.table}-${bookingData.seat}`,
+            newStatus: 'selected',
+            booking: result.rows[0],
+            timestamp: Date.now()
+        });
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -2681,6 +2706,76 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
         res.status(500).json({ 
             error: 'Failed to check ticket existence',
             details: error.message 
+        });
+    }
+});
+
+// Admin payment confirmation endpoint
+app.post('/api/admin/confirm-payment', async (req, res) => {
+    try {
+        const { bookingId, adminId, adminNotes } = req.body;
+        
+        if (!bookingId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Booking ID is required' 
+            });
+        }
+        
+        // Get the booking details
+        const bookingResult = await db.query(
+            'SELECT * FROM bookings WHERE id = $1',
+            [bookingId]
+        );
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Booking not found' 
+            });
+        }
+        
+        const booking = bookingResult.rows[0];
+        
+        // Update booking status to confirmed
+        const updateResult = await db.query(`
+            UPDATE bookings 
+            SET booking_status = 'booked_paid',
+                payment_confirmed_by_admin = true,
+                confirmed_at = NOW(),
+                admin_confirmed_by = $1,
+                admin_notes = $2,
+                updated_at = NOW()
+            WHERE id = $3
+            RETURNING *
+        `, [adminId || 'admin', adminNotes || '', bookingId]);
+        
+        const updatedBooking = updateResult.rows[0];
+        
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: bookingId,
+            tableId: updatedBooking.table_number,
+            seatId: `${updatedBooking.table_number}-${updatedBooking.seat_number}`,
+            newStatus: 'booked_paid',
+            booking: updatedBooking,
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Admin confirmed payment for booking ${bookingId}`);
+        
+        res.json({
+            success: true,
+            message: 'Payment confirmed successfully',
+            booking: updatedBooking
+        });
+        
+    } catch (error) {
+        console.error('❌ Error confirming payment:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to confirm payment' 
         });
     }
 });

@@ -1,44 +1,29 @@
 // Safe DOM text setter helper function
-function setTextSafe(selectorOrEl, text, options = {}) {
-    const { show = true, createFallback = true } = options;
-    
+function setTextSafe(selectorOrEl, text, { show = true } = {}) {
     try {
-        let element;
-        
-        if (typeof selectorOrEl === 'string') {
-            element = document.querySelector(selectorOrEl);
-        } else {
-            element = selectorOrEl;
-        }
-        
-        if (element) {
-            element.textContent = text;
-            if (show && element.style) {
-                element.style.display = 'block';
-            }
+        const el = (typeof selectorOrEl === 'string') ? document.querySelector(selectorOrEl) : selectorOrEl;
+        if (el) {
+            el.textContent = text;
+            if (show) el.style.display = '';
             return true;
-        } else if (createFallback) {
-            // Create fallback element if it doesn't exist
-            const fallbackId = selectorOrEl.replace('#', '') || 'fallback-error';
-            const fallback = document.createElement('div');
+        }
+        console.warn('setTextSafe: element not found', selectorOrEl);
+        // fallback: create a single #paymentError element if missing
+        const fallbackId = 'paymentError';
+        let fallback = document.getElementById(fallbackId);
+        if (!fallback) {
+            fallback = document.createElement('div');
             fallback.id = fallbackId;
             fallback.className = 'alert alert-error';
-            fallback.setAttribute('role', 'alert');
+            fallback.setAttribute('role','alert');
             fallback.setAttribute('aria-live', 'polite');
-            fallback.style.display = show ? 'block' : 'none';
-            fallback.textContent = text;
-            
-            // Try to append to body or a container
-            const container = document.querySelector('.container') || document.body;
-            if (container) {
-                container.appendChild(fallback);
-                return true;
-            }
+            document.body.appendChild(fallback);
         }
-        
+        fallback.textContent = text;
+        if (show) fallback.style.display = '';
         return false;
-    } catch (error) {
-        console.error('Error in setTextSafe:', error);
+    } catch (err) {
+        console.error('setTextSafe error', err);
         return false;
     }
 }
@@ -503,8 +488,11 @@ class StudentTicketingSystem {
             // Save data
             this.saveData();
             
-            // Start real-time updates to get admin confirmation
-            this.startRealTimeUpdates();
+        // Start real-time updates to get admin confirmation
+        this.startRealTimeUpdates();
+        
+        // Listen for real-time booking updates
+        this.setupRealtimeUpdates();
             
             // Clear temporary data
             this.tempBookingData = null;
@@ -519,8 +507,7 @@ class StudentTicketingSystem {
             
             // Show user-friendly error message
             const errorMessage = `Ошибка при подтверждении оплаты: ${error.message}`;
-            setTextSafe('#paymentError .error-message', errorMessage);
-            setTextSafe('#paymentError', '', { show: true });
+            setTextSafe('#paymentError', errorMessage, { show: true });
             
             // Auto-hide error after 10 seconds
             setTimeout(() => {
@@ -554,6 +541,79 @@ class StudentTicketingSystem {
             });
         } catch (logError) {
             console.warn('Failed to log client error to backend:', logError);
+        }
+    }
+
+    // Setup real-time updates for booking status changes
+    setupRealtimeUpdates() {
+        if (this.socket) {
+            // Listen for booking updates
+            this.socket.on('booking.updated', (data) => {
+                console.log('📡 Received booking update:', data);
+                this.handleBookingUpdate(data);
+            });
+        }
+    }
+
+    // Handle real-time booking updates
+    handleBookingUpdate(data) {
+        const { bookingId, tableId, seatId, newStatus, booking } = data;
+        
+        if (seatId) {
+            // Update the specific seat/table status
+            const seatElement = document.querySelector(`[data-seat-id="${seatId}"]`);
+            const tableArea = document.querySelector(`[data-table="${tableId}"]`);
+            
+            if (seatElement) {
+                this.updateSeatStatus(seatElement, newStatus);
+            }
+            
+            if (tableArea) {
+                this.updateTableStatus(tableArea, newStatus);
+            }
+        }
+    }
+
+    // Update seat status based on booking status
+    updateSeatStatus(seatElement, status) {
+        // Remove all status classes
+        seatElement.classList.remove('selected', 'pending', 'booked', 'awaiting');
+        
+        // Add appropriate class based on status
+        switch (status) {
+            case 'selected':
+                seatElement.classList.add('selected');
+                seatElement.textContent = 'Выбрано';
+                break;
+            case 'awaiting_confirmation':
+                seatElement.classList.add('awaiting');
+                seatElement.textContent = 'Ожидает подтверждения';
+                break;
+            case 'booked_paid':
+                seatElement.classList.add('booked');
+                seatElement.textContent = 'Забронировано (оплачено)';
+                break;
+            default:
+                seatElement.textContent = seatElement.dataset.seat || '';
+        }
+    }
+
+    // Update table status based on booking status
+    updateTableStatus(tableArea, status) {
+        // Remove all status classes
+        tableArea.classList.remove('selected', 'pending', 'booked', 'awaiting');
+        
+        // Add appropriate class based on status
+        switch (status) {
+            case 'selected':
+                tableArea.classList.add('selected');
+                break;
+            case 'awaiting_confirmation':
+                tableArea.classList.add('awaiting');
+                break;
+            case 'booked_paid':
+                tableArea.classList.add('booked');
+                break;
         }
     }
 
