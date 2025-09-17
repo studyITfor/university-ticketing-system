@@ -1,3 +1,48 @@
+// Safe DOM text setter helper function
+function setTextSafe(selectorOrEl, text, options = {}) {
+    const { show = true, createFallback = true } = options;
+    
+    try {
+        let element;
+        
+        if (typeof selectorOrEl === 'string') {
+            element = document.querySelector(selectorOrEl);
+        } else {
+            element = selectorOrEl;
+        }
+        
+        if (element) {
+            element.textContent = text;
+            if (show && element.style) {
+                element.style.display = 'block';
+            }
+            return true;
+        } else if (createFallback) {
+            // Create fallback element if it doesn't exist
+            const fallbackId = selectorOrEl.replace('#', '') || 'fallback-error';
+            const fallback = document.createElement('div');
+            fallback.id = fallbackId;
+            fallback.className = 'alert alert-error';
+            fallback.setAttribute('role', 'alert');
+            fallback.setAttribute('aria-live', 'polite');
+            fallback.style.display = show ? 'block' : 'none';
+            fallback.textContent = text;
+            
+            // Try to append to body or a container
+            const container = document.querySelector('.container') || document.body;
+            if (container) {
+                container.appendChild(fallback);
+                return true;
+            }
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Error in setTextSafe:', error);
+        return false;
+    }
+}
+
 // Main Ticketing System for Students
 class StudentTicketingSystem {
     constructor() {
@@ -431,11 +476,16 @@ class StudentTicketingSystem {
     async handlePaymentConfirmation() {
         if (!this.currentBookingSeat || !this.tempBookingData) {
             console.error('❌ No booking data available for payment confirmation');
+            setTextSafe('#paymentError .error-message', 'Нет данных для подтверждения оплаты');
+            setTextSafe('#paymentError', '', { show: true });
             return;
         }
 
         try {
             console.log('💳 Processing payment confirmation...');
+            
+            // Hide any existing error messages
+            setTextSafe('#paymentError', '', { show: false });
             
             // NOW save booking to server after payment confirmation
             await this.saveBooking(this.tempBookingData);
@@ -463,7 +513,47 @@ class StudentTicketingSystem {
             console.log('✅ Payment confirmed and booking saved to server');
         } catch (error) {
             console.error('❌ Error confirming payment:', error);
-            alert('Ошибка при подтверждении оплаты: ' + error.message);
+            
+            // Log error to backend if possible
+            this.logClientError('payment_confirmation_error', error.message, error.stack);
+            
+            // Show user-friendly error message
+            const errorMessage = `Ошибка при подтверждении оплаты: ${error.message}`;
+            setTextSafe('#paymentError .error-message', errorMessage);
+            setTextSafe('#paymentError', '', { show: true });
+            
+            // Auto-hide error after 10 seconds
+            setTimeout(() => {
+                setTextSafe('#paymentError', '', { show: false });
+            }, 10000);
+        }
+    }
+
+    // Retry payment confirmation
+    retryPaymentConfirmation() {
+        setTextSafe('#paymentError', '', { show: false });
+        this.handlePaymentConfirmation();
+    }
+
+    // Log client errors to backend
+    async logClientError(errorType, message, stack) {
+        try {
+            await fetch('/api/log-client-error', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    errorType,
+                    message,
+                    stack,
+                    url: window.location.href,
+                    userAgent: navigator.userAgent,
+                    timestamp: new Date().toISOString()
+                })
+            });
+        } catch (logError) {
+            console.warn('Failed to log client error to backend:', logError);
         }
     }
 

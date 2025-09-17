@@ -252,6 +252,15 @@
             </div>
         </div>
 
+        <!-- Payment Error Fallback -->
+        <div id="paymentError" class="alert alert-error" role="alert" aria-live="polite" style="display:none;">
+            <div class="error-content">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span class="error-message"></span>
+                <button class="btn btn-primary retry-btn" onclick="retryPaymentConfirmation()">Повторить</button>
+            </div>
+        </div>
+
     <!-- Booking Confirmation Modal -->
     <div class="modal" id="confirmationModal">
         <div class="modal-content">
@@ -323,14 +332,21 @@
     <script>
         // Global reference to student system for test panel
         let studentSystem;
-        
+
         // Toggle test panel visibility
         function toggleTestPanel() {
             const panel = document.getElementById('testPanel');
             const isVisible = panel.style.display !== 'none';
             panel.style.display = isVisible ? 'none' : 'block';
         }
-        
+
+        // Global retry function for payment confirmation
+        function retryPaymentConfirmation() {
+            if (studentSystem && typeof studentSystem.retryPaymentConfirmation === 'function') {
+                studentSystem.retryPaymentConfirmation();
+            }
+        }
+
         // Initialize student system and make it globally accessible
         document.addEventListener('DOMContentLoaded', () => {
             studentSystem = new StudentTicketingSystem();

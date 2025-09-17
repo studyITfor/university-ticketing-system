@@ -1102,3 +1102,55 @@ body {
     color: #0c5460;
     border: 1px solid #bee5eb;
 }
+
+/* Payment Error Styles */
+#paymentError {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ff4444;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+    z-index: 10000;
+    max-width: 400px;
+    animation: slideInRight 0.3s ease-out;
+}
+
+#paymentError .error-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#paymentError .error-message {
+    flex: 1;
+    font-weight: 500;
+}
+
+#paymentError .retry-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#paymentError .retry-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}

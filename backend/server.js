@@ -2685,6 +2685,32 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
     }
 });
 
+// Log client errors
+app.post('/api/log-client-error', async (req, res) => {
+    try {
+        const { errorType, message, stack, url, userAgent, timestamp } = req.body;
+        
+        console.log('🚨 Client Error Logged:', {
+            errorType,
+            message,
+            url,
+            timestamp,
+            userAgent: userAgent ? userAgent.substring(0, 100) + '...' : 'Unknown'
+        });
+        
+        // In a production environment, you might want to save this to a database
+        // For now, we'll just log it to the console
+        if (stack) {
+            console.log('Stack trace:', stack);
+        }
+        
+        res.json({ success: true, message: 'Error logged successfully' });
+    } catch (error) {
+        console.error('Failed to log client error:', error);
+        res.status(500).json({ success: false, error: 'Failed to log error' });
+    }
+});
+
 // Test endpoint to manually trigger seat updates
 app.post('/api/test/emit-seat-update', (req, res) => {
     try {
