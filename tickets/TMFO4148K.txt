@@ -1,0 +1,15 @@
+🎫 TICKET CONFIRMED 🎫
+
+Ticket ID: TMFO4148K
+Booking ID: BKMAKGTS2PKD
+Name: User Payment
+Phone: +996555123467
+Table: 1
+Seat: 12
+Date: 2025-09-17T15:01:43.987Z
+Status: ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓

@@ -9,6 +9,7 @@ class StudentTicketingSystem {
         this.bookedSeats = new Set();
         this.prebookedSeats = new Set();
         this.pendingSeats = new Set();
+        this.paidSeats = new Set();
         
         this.currentBookingSeat = null;
         this.tempBookingData = null;
@@ -437,35 +438,73 @@ class StudentTicketingSystem {
         }
 
         try {
-            console.log('💳 Processing payment confirmation...');
+            console.log('💳 Processing user payment confirmation...');
             
-            // NOW save booking to server after payment confirmation
-            await this.saveBooking(this.tempBookingData);
+            // Show loading state
+            const confirmButton = document.getElementById('confirmPayment');
+            if (confirmButton) {
+                confirmButton.disabled = true;
+                confirmButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обработка...';
+            }
             
-            // Mark seat as pending (yellow) after successful server booking
-            this.pendingSeats.add(this.currentBookingSeat);
-            this.selectedSeats.delete(this.currentBookingSeat);
-            this.updateSeatDisplay();
-            this.updateBookingSummary();
-            
-            // Show confirmation message
-            this.hideModal('paymentModal');
-            this.showConfirmationModal();
-            
-            // Save data
-            this.saveData();
-            
-            // Start real-time updates to get admin confirmation
-            this.startRealTimeUpdates();
-            
-            // Clear temporary data
-            this.tempBookingData = null;
-            this.currentBookingSeat = null;
-            
-            console.log('✅ Payment confirmed and booking saved to server');
+            // Call user payment confirmation endpoint
+            const response = await fetch('/api/user-payment-confirm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(this.tempBookingData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Mark seat as paid (red) after successful payment confirmation
+                this.paidSeats.add(this.currentBookingSeat);
+                this.pendingSeats.delete(this.currentBookingSeat);
+                this.selectedSeats.delete(this.currentBookingSeat);
+                this.updateSeatDisplay();
+                this.updateBookingSummary();
+                
+                // Store booking ID for later use
+                this.currentBookingId = result.bookingId;
+                
+                // Update local storage
+                const bookings = this.getBookings();
+                this.tempBookingData.id = result.bookingId;
+                this.tempBookingData.status = 'paid';
+                this.tempBookingData.ticketId = result.ticketId;
+                bookings[result.bookingId] = this.tempBookingData;
+                localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
+                
+                // Show success message
+                this.hideModal('paymentModal');
+                this.showConfirmationModal(result);
+                
+                // Save data
+                this.saveData();
+                
+                // Start real-time updates
+                this.startRealTimeUpdates();
+                
+                // Clear temporary data
+                this.tempBookingData = null;
+                this.currentBookingSeat = null;
+                
+                console.log('✅ User payment confirmed and booking saved with paid status');
+            } else {
+                throw new Error(result.error || 'Failed to confirm payment');
+            }
         } catch (error) {
             console.error('❌ Error confirming payment:', error);
             alert('Ошибка при подтверждении оплаты: ' + error.message);
+        } finally {
+            // Reset button state
+            const confirmButton = document.getElementById('confirmPayment');
+            if (confirmButton) {
+                confirmButton.disabled = false;
+                confirmButton.innerHTML = '<i class="fas fa-check"></i> Я оплатил';
+            }
         }
     }
 
@@ -663,7 +702,7 @@ class StudentTicketingSystem {
         }
     }
 
-    showConfirmationModal() {
+    showConfirmationModal(paymentResult = null) {
         const [table, seat] = this.currentBookingSeat.split('-');
         document.getElementById('confirmedSeat').textContent = 
             `Стол ${table}, Место ${seat}`;
@@ -676,10 +715,21 @@ class StudentTicketingSystem {
             }
         }
         
-        // Update confirmation message to reflect pending status
+        // Update confirmation message based on payment status
         const confirmationMessage = document.querySelector('#confirmationModal .modal-body p');
         if (confirmationMessage) {
-            confirmationMessage.textContent = 'Ваша заявка на бронирование отправлена и ожидает подтверждения администратора. Место будет зарезервировано после подтверждения оплаты.';
+            if (paymentResult && paymentResult.success) {
+                // Payment confirmed - show success message
+                confirmationMessage.innerHTML = `
+                    <strong>✅ Оплата подтверждена!</strong><br><br>
+                    Ваше место успешно забронировано и оплачено.<br>
+                    ${paymentResult.whatsappSent ? '📱 Билет отправлен в WhatsApp' : '📱 Билет будет отправлен в WhatsApp'}<br>
+                    ${paymentResult.ticketId ? `🎫 ID билета: ${paymentResult.ticketId}` : ''}
+                `;
+            } else {
+                // Pending status - show waiting message
+                confirmationMessage.textContent = 'Ваша заявка на бронирование отправлена и ожидает подтверждения администратора. Место будет зарезервировано после подтверждения оплаты.';
+            }
         }
         
         this.showModal('confirmationModal');
@@ -747,6 +797,12 @@ class StudentTicketingSystem {
                 seatElement.style.backgroundColor = '#FFD700';
                 seatElement.style.borderColor = '#FFD700';
                 seatElement.style.color = '#212529';
+            } else if (this.paidSeats.has(seatId)) {
+                seatElement.classList.add('paid');
+                // Apply red color for paid seats
+                seatElement.style.backgroundColor = '#FF4C4C';
+                seatElement.style.borderColor = '#FF4C4C';
+                seatElement.style.color = '#FFFFFF';
             } else if (this.pendingSeats.has(seatId)) {
                 seatElement.classList.add('pending');
                 // Apply yellow color for pending seats
@@ -878,22 +934,31 @@ class StudentTicketingSystem {
         }
         
         // Update local state based on status
-        if (status === 'reserved' || status === 'confirmed' || status === 'paid' || status === 'Оплачен') {
+        if (status === 'reserved' || status === 'confirmed' || status === 'Оплачен') {
             this.bookedSeats.add(seatId);
+            this.pendingSeats.delete(seatId);
+            this.prebookedSeats.delete(seatId);
+            this.paidSeats.delete(seatId);
+        } else if (status === 'paid') {
+            this.paidSeats.add(seatId);
+            this.bookedSeats.delete(seatId);
             this.pendingSeats.delete(seatId);
             this.prebookedSeats.delete(seatId);
         } else if (status === 'pending') {
             this.pendingSeats.add(seatId);
             this.bookedSeats.delete(seatId);
             this.prebookedSeats.delete(seatId);
+            this.paidSeats.delete(seatId);
         } else if (status === 'prebooked') {
             this.prebookedSeats.add(seatId);
             this.bookedSeats.delete(seatId);
             this.pendingSeats.delete(seatId);
+            this.paidSeats.delete(seatId);
         } else if (status === 'available' || status === 'active') {
             this.bookedSeats.delete(seatId);
             this.pendingSeats.delete(seatId);
             this.prebookedSeats.delete(seatId);
+            this.paidSeats.delete(seatId);
         }
         
         // Update statistics
@@ -957,6 +1022,7 @@ class StudentTicketingSystem {
             bookedSeats: Array.from(this.bookedSeats),
             prebookedSeats: Array.from(this.prebookedSeats),
             pendingSeats: Array.from(this.pendingSeats),
+            paidSeats: Array.from(this.paidSeats),
             selectedSeats: Array.from(this.selectedSeats)
         };
         localStorage.setItem('zolotayaSeredinaData', JSON.stringify(data));
@@ -970,6 +1036,7 @@ class StudentTicketingSystem {
                 this.bookedSeats = new Set(data.bookedSeats || []);
                 this.prebookedSeats = new Set(data.prebookedSeats || []);
                 this.pendingSeats = new Set(data.pendingSeats || []);
+                this.paidSeats = new Set(data.paidSeats || []);
                 this.selectedSeats = new Set(data.selectedSeats || []);
                 
                 this.updateSeatDisplay();

@@ -1492,6 +1492,166 @@ app.post('/api/resend-ticket', async (req, res) => {
   }
 });
 
+// User payment confirmation endpoint - for "Я оплатил" button
+app.post('/api/user-payment-confirm', async (req, res) => {
+  const { seatId, studentName, phone, email, whatsapp, paymentMethod } = req.body;
+  console.log('💳 User payment confirmation request:', {
+    seatId,
+    studentName,
+    phone,
+    email,
+    whatsapp,
+    paymentMethod,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!seatId || !studentName || !phone) {
+    return res.status(400).json({ error: 'seatId, studentName, and phone are required' });
+  }
+
+  try {
+    // Parse seat information
+    const [table, seat] = seatId.split('-').map(Number);
+    if (!table || !seat) {
+      return res.status(400).json({ error: 'Invalid seat format' });
+    }
+
+    // Check if seat is already booked
+    const existingBookings = await db.query(
+      'SELECT * FROM bookings WHERE seat = $1 AND status IN ($2, $3, $4)',
+      [`${table}-${seat}`, 'paid', 'confirmed', 'prebooked']
+    );
+
+    if (existingBookings.rows.length > 0) {
+      return res.status(409).json({ error: 'Seat is already booked' });
+    }
+
+    // Generate booking ID
+    const bookingId = 'BKM' + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+    // Create or update user
+    await db.query(
+      'INSERT INTO users (phone, role) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
+      [phone, 'user']
+    );
+
+    // Start transaction
+    await db.query('BEGIN');
+
+    // Create booking with 'paid' status directly
+    const result = await db.query(
+      'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'paid']
+    );
+
+    const booking = result.rows[0];
+
+    // Create payment record
+    const paymentData = {
+      transaction_id: `txn_${Date.now()}`,
+      booking_id: bookingId,
+      user_phone: phone,
+      amount: 0,
+      status: 'confirmed',
+      provider: paymentMethod || 'user_confirmed',
+      raw_payload: JSON.stringify(req.body)
+    };
+
+    await db.query(
+      `INSERT INTO payments (transaction_id, booking_id, user_phone, amount, status, provider, raw_payload, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,now()) RETURNING id`,
+      [paymentData.transaction_id, paymentData.booking_id, paymentData.user_phone, paymentData.amount, paymentData.status, paymentData.provider, paymentData.raw_payload]
+    );
+
+    await db.query('COMMIT');
+    console.log('✅ User payment transaction committed successfully');
+
+    // Generate ticket
+    let ticket = null;
+    try {
+      console.log('🎫 Generating ticket for user booking:', booking.id);
+      const { generateTicketForBooking } = require('./ticket-utils');
+      ticket = await generateTicketForBooking(booking);
+      console.log('✅ Ticket generated successfully:', ticket);
+    } catch (e) {
+      console.error('❌ Ticket generation error:', e);
+    }
+
+    // Send WhatsApp ticket
+    let whatsappResult = null;
+    try {
+      const phoneToSend = whatsapp || phone;
+      if (phoneToSend && /^\+\d{10,15}$/.test(phoneToSend)) {
+        console.log('📱 Sending WhatsApp ticket to user:', phoneToSend, 'ticket:', ticket?.ticketId);
+        const { sendWhatsAppTicket } = require('./ticket-utils');
+        whatsappResult = await sendWhatsAppTicket(phoneToSend, ticket || { ticketId: null, path: null });
+        
+        if (whatsappResult.success) {
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
+            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, booking.id]);
+          console.log('✅ WhatsApp sent successfully to user:', {
+            phone: phoneToSend,
+            provider: whatsappResult.provider,
+            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+            ticketId: ticket?.ticketId
+          });
+        }
+      }
+    } catch (e) {
+      console.error('❌ WhatsApp send error:', e);
+    }
+
+    // Emit real-time updates
+    try {
+      console.log('📡 Emitting user payment confirmation events...');
+      if (io) {
+        // Emit booking created event
+        io.emit('update-seat-status', {
+          type: 'booking-created',
+          data: {
+            bookingId: bookingId,
+            table: table,
+            seat: seat,
+            status: 'paid',
+            firstName: studentName.split(' ')[0] || studentName,
+            lastName: studentName.split(' ')[1] || ''
+          },
+          timestamp: Date.now()
+        });
+
+        // Emit seat status update
+        const seatId = `${table}-${seat}`;
+        io.emit('update-seat-status', {
+          seatId: seatId,
+          status: 'paid',
+          timestamp: Date.now()
+        });
+
+        // Emit booking updated event
+        io.emit('bookingUpdated', booking);
+        
+        console.log('✅ User payment events emitted successfully');
+      }
+    } catch (e) {
+      console.error('❌ Socket emit error', e);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+      bookingId: bookingId,
+      ticketId: ticket && ticket.ticketId || null,
+      ticketPath: ticket && ticket.path || null,
+      whatsappSent: whatsappResult && whatsappResult.success || false
+    });
+
+  } catch (err) {
+    try { await db.query('ROLLBACK'); } catch(e) {}
+    console.error('User payment confirmation error:', err);
+    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты', details: err.message });
+  }
+});
+
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
   const { bookingId, paymentMethod, amount } = req.body;
@@ -2313,7 +2473,7 @@ app.get('/api/secure-tickets/stats', (req, res) => {
 });
 
 // Get seat statuses for real-time updates
-app.get('/api/seat-statuses', (req, res) => {
+app.get('/api/seat-statuses', async (req, res) => {
     try {
         const seatStatuses = {};
         
@@ -2325,20 +2485,12 @@ app.get('/api/seat-statuses', (req, res) => {
             }
         }
         
-        // Load bookings from file
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        // Get all bookings and their seat statuses
-        const allBookings = Object.values(bookings);
+        // Load bookings from database
+        const allBookings = await db.getSeatStatuses();
         
         allBookings.forEach(booking => {
-            if (booking.table && booking.seat && booking.status) {
-                const seatId = `${booking.table}-${booking.seat}`;
+            if (booking.table_number && booking.seat_number && booking.status) {
+                const seatId = `${booking.table_number}-${booking.seat_number}`;
                 let status = 'active'; // default
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {

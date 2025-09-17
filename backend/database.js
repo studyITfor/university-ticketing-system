@@ -131,7 +131,12 @@ if (!connectionString) {
       }
       return { rows: [] };
     }, 
-    getSeatStatuses: async () => [], 
+    getSeatStatuses: async () => {
+      // Return all bookings for seat status calculation
+      const bookings = Array.from(mockData.bookingsByStringId.values());
+      console.log('🔍 Mock DB: Returning bookings for seat statuses:', bookings.length);
+      return bookings;
+    }, 
     checkDatabaseHealth: async () => false 
   };
   return;

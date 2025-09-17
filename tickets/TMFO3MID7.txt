@@ -1,0 +1,15 @@
+🎫 TICKET CONFIRMED 🎫
+
+Ticket ID: TMFO3MID7
+Booking ID: BKMFO3MFL5
+Name: undefined undefined
+Phone: +996555123465
+Table: 1
+Seat: 10
+Date: 2025-09-17T14:50:18.857Z
+Status: ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓
