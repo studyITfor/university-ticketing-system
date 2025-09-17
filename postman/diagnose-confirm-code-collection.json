@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "Diagnose Confirm Code Internal Error",
+    "description": "Collection for testing WhatsApp confirmation code error handling",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Test Opt-in with No Provider (Development Mode)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Test\",\n  \"surname\": \"User\",\n  \"phone\": \"+1234567890\",\n  \"optin_source\": \"booking_form\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/optin",
+          "host": ["{{base_url}}"],
+          "path": ["api", "optin"]
+        },
+        "description": "Test opt-in when WhatsApp provider is not configured (should return development mode response)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Booking Creation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"phone\": \"+1234567890\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"whatsappOptin\": true,\n  \"consentText\": \"I agree to receive notifications\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/create-booking",
+          "host": ["{{base_url}}"],
+          "path": ["api", "create-booking"]
+        },
+        "description": "Test booking creation with WhatsApp opt-in"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Confirm Opt-in",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"+1234567890\",\n  \"code\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/confirm-optin",
+          "host": ["{{base_url}}"],
+          "path": ["api", "confirm-optin"]
+        },
+        "description": "Test confirmation code validation"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "description": "Base URL for the API"
+    }
+  ]
+}

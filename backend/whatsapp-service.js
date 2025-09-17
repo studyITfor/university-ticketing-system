@@ -54,7 +54,14 @@ class WhatsAppService {
     } else if (this.provider === 'green_api') {
       return await this.sendViaGreenAPI(phone, message);
     } else {
-      throw new Error('No WhatsApp provider configured');
+      // Return a structured error instead of throwing
+      console.warn('WhatsApp provider not configured - returning mock success for development');
+      return {
+        success: false,
+        error: 'WhatsApp service not configured',
+        code: 'PROVIDER_NOT_CONFIGURED',
+        isDevelopmentMode: process.env.NODE_ENV !== 'production'
+      };
     }
   }
 

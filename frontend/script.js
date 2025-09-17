@@ -2143,8 +2143,15 @@ Socket.IO Diagnostics:
             
             if (result.success) {
                 console.log('✅ WhatsApp opt-in initiated successfully');
-                // Show confirmation modal
-                this.showConfirmationCodeModal(bookingData.phone);
+                
+                // Check if this is development mode with provider not configured
+                if (result.developmentMode && result.confirmationCode) {
+                    console.log('🔧 Development mode: WhatsApp not configured, showing code directly');
+                    this.showConfirmationCodeModal(bookingData.phone, result.confirmationCode);
+                } else {
+                    // Normal flow - show confirmation modal
+                    this.showConfirmationCodeModal(bookingData.phone);
+                }
             } else {
                 console.error('❌ WhatsApp opt-in failed:', result.error);
                 this.showOptInMessage('error', 'Ошибка при отправке кода подтверждения: ' + result.error);
@@ -2155,10 +2162,17 @@ Socket.IO Diagnostics:
         }
     }
 
-    showConfirmationCodeModal(phone) {
+    showConfirmationCodeModal(phone, developmentCode = null) {
         document.getElementById('confirmationPhone').textContent = phone;
         document.getElementById('confirmationCode').value = '';
         document.getElementById('confirmationMessage').style.display = 'none';
+        
+        // If in development mode with code provided, show it
+        if (developmentCode) {
+            document.getElementById('confirmationCode').value = developmentCode;
+            this.showConfirmationMessage('info', `Development mode: Confirmation code is ${developmentCode}`);
+        }
+        
         this.showModal('confirmationCodeModal');
     }
 

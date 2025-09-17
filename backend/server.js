@@ -2144,12 +2144,37 @@ app.post('/api/optin', async (req, res) => {
       
       if (!sendResult.success) {
         console.error('Failed to send WhatsApp confirmation:', sendResult.error);
-        return res.status(500).json({ 
-          success: false,
-          error: 'Failed to send confirmation code. Please try again.',
-          code: 'WHATSAPP_SEND_FAILED',
-          details: sendResult.error
-        });
+        
+        // Handle different error types with appropriate responses
+        if (sendResult.code === 'PROVIDER_NOT_CONFIGURED') {
+          // In development mode, return success with a warning
+          if (sendResult.isDevelopmentMode) {
+            console.warn('Development mode: WhatsApp provider not configured, returning mock success');
+            return res.json({
+              success: true,
+              message: 'Confirmation code generated (WhatsApp not configured in development)',
+              phone: normalizedPhone,
+              confirmationCode: confirmationCode, // Include code for development testing
+              developmentMode: true
+            });
+          } else {
+            // In production, return proper error
+            return res.status(503).json({ 
+              success: false,
+              error: 'WhatsApp service is temporarily unavailable. Please contact support.',
+              code: 'WHATSAPP_SERVICE_UNAVAILABLE',
+              details: 'Service configuration issue'
+            });
+          }
+        } else {
+          // Other WhatsApp errors
+          return res.status(500).json({ 
+            success: false,
+            error: 'Failed to send confirmation code. Please try again.',
+            code: 'WHATSAPP_SEND_FAILED',
+            details: sendResult.error
+          });
+        }
       }
     } catch (whatsappError) {
       console.error('WhatsApp service error:', whatsappError);
