@@ -2159,6 +2159,8 @@ function initializeSeatingPlanImage() {
     image.addEventListener('load', () => {
         console.log('Seating plan image loaded successfully:', image.src);
         createInteractiveTableAreas();
+        // Cleanup any existing overlays
+        cleanupTableOverlays();
     });
 
     // Create clickable table areas
@@ -2228,14 +2230,7 @@ function initializeSeatingPlanImage() {
     
     // Handle table click
     function handleTableClick(tableNumber, seatNumber, tableElement) {
-        // Remove previous selection
-        document.querySelectorAll('.table-area.selected').forEach(el => {
-            el.classList.remove('selected');
-        });
-        
-        // Select current table
-        tableElement.classList.add('selected');
-        
+        // Removed selection overlay - no visual feedback for selected tables
         // Trigger booking for this table
         if (window.selectTable) {
             window.selectTable(tableNumber, seatNumber);
@@ -2250,21 +2245,21 @@ function initializeSeatingPlanImage() {
     
     // Update table statuses based on existing bookings
     function updateTableStatuses() {
-        // This would be called when booking data is loaded
-        // For now, we'll mark some tables as booked for demonstration
-        const bookedTables = [1, 5, 12, 18, 25, 31]; // Example booked tables
-        
-        bookedTables.forEach(tableNum => {
-            const tableArea = document.querySelector(`[data-table="${tableNum}"]`);
-            if (tableArea) {
-                tableArea.classList.add('booked');
-                tableArea.textContent = '✗';
-            }
+        // Removed booked table overlays - no visual indication of booked tables
+        // Table booking status is handled internally without visual overlays
+    }
+    
+    // Cleanup function to remove any existing selected/booked overlays
+    function cleanupTableOverlays() {
+        document.querySelectorAll('.table-area.selected, .table-area.booked').forEach(el => {
+            el.classList.remove('selected', 'booked');
+            el.textContent = '';
         });
     }
     
-    // Make updateTableStatuses available globally
+    // Make functions available globally
     window.updateTableStatuses = updateTableStatuses;
+    window.cleanupTableOverlays = cleanupTableOverlays;
     
     // Create selectTable function to integrate with existing booking system
     window.selectTable = function(tableNumber, seatNumber) {

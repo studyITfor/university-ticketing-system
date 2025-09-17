@@ -240,22 +240,7 @@ body {
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.table-area.selected {
-    border-color: #667eea;
-    background: rgba(102, 126, 234, 0.3);
-    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
-}
-
-.table-area.booked {
-    background: rgba(255, 0, 0, 0.2);
-    border-color: #ff4444;
-    cursor: not-allowed;
-}
-
-.table-area.booked:hover {
-    transform: none;
-    box-shadow: none;
-}
+/* Removed .table-area.selected and .table-area.booked styles to prevent overlays */
 
 .seating-plan-caption {
     font-size: 0.9rem;
