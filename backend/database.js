@@ -84,6 +84,18 @@ if (!connectionString) {
         console.log('❌ Mock DB: Booking not found for confirm-payment');
         return { rows: [] };
       }
+      if (text.includes('SELECT * FROM bookings WHERE booking_string_id = $1 OR id = $1')) {
+        // Handle generate-ticket query
+        console.log('🔍 Mock DB: Looking for booking with string ID or numeric ID for generate-ticket:', params[0]);
+        console.log('🔍 Mock DB: Available bookings:', Array.from(mockData.bookingsByStringId.keys()));
+        const booking = mockData.bookingsByStringId.get(params[0]) || mockData.bookings.get(parseInt(params[0]));
+        if (booking) {
+          console.log('✅ Mock DB: Found booking for generate-ticket:', booking);
+          return { rows: [booking] };
+        }
+        console.log('❌ Mock DB: Booking not found for generate-ticket');
+        return { rows: [] };
+      }
       if (text.includes('SELECT id, booking_string_id, first_name, last_name, status FROM bookings ORDER BY created_at DESC LIMIT 10')) {
         // Handle debug query
         const bookings = Array.from(mockData.bookingsByStringId.values());

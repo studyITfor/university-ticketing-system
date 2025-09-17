@@ -191,10 +191,25 @@
                             <input type="text" id="lastName" name="lastName" placeholder="Иванов" required>
                         </div>
                         <div class="form-group">
-                            <label for="phone">WhatsApp Number *</label>
-                            <input type="tel" id="phone" name="phone" placeholder="+1234567890" value="+" required>
+                            <label for="phone">Телефон *</label>
+                            <input type="tel" id="phone" name="phone" placeholder="+996555123456" value="+" required>
                         </div>
-                        <!-- Email field removed - phone-only authentication -->
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" placeholder="student@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="whatsapp">WhatsApp Number *</label>
+                            <input type="tel" id="whatsapp" name="whatsapp" placeholder="+996555123456" value="+">
+                        </div>
+                        <div class="form-group">
+                            <label for="paymentMethod">Способ оплаты *</label>
+                            <select id="paymentMethod" name="paymentMethod" required>
+                                <option value="card">Банковская карта</option>
+                                <option value="mobile">Мобильный перевод</option>
+                                <option value="cash">Наличные</option>
+                            </select>
+                        </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary" id="cancelBooking">Отмена</button>
                             <button type="submit" class="btn btn-primary">Забронировать место</button>

@@ -912,6 +912,90 @@ class AdminPanel {
         }
     }
 
+    async generateTicket(bookingId) {
+        try {
+            console.log('🎫 Generating ticket for booking:', bookingId);
+            
+            const booking = this.bookings[bookingId];
+            if (!booking) {
+                alert('Бронирование не найдено');
+                return;
+            }
+
+            // Call the ticket generation endpoint
+            const response = await fetch('/api/generate-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ bookingId })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ Ticket generated successfully:', result);
+                
+                // Update the booking with ticket info
+                if (this.bookings[bookingId]) {
+                    this.bookings[bookingId].ticketId = result.ticketId;
+                    this.bookings[bookingId].ticketPath = result.ticketPath;
+                }
+                
+                // Open the ticket in a new tab
+                if (result.ticketPath) {
+                    const ticketUrl = `https://upbeat-compassion-production.up.railway.app${result.ticketPath}`;
+                    window.open(ticketUrl, '_blank');
+                }
+                
+                // Refresh the admin panel
+                this.renderBookingsTable();
+                
+                alert('Билет сгенерирован и открыт в новой вкладке!');
+            } else {
+                console.error('❌ Ticket generation failed:', result.error);
+                alert('Ошибка при генерации билета: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error generating ticket:', error);
+            alert('Ошибка при генерации билета: ' + error.message);
+        }
+    }
+
+    async resendTicket(bookingId) {
+        try {
+            console.log('📱 Resending ticket for booking:', bookingId);
+            
+            const booking = this.bookings[bookingId];
+            if (!booking) {
+                alert('Бронирование не найдено');
+                return;
+            }
+
+            // Call the resend ticket endpoint
+            const response = await fetch('/api/resend-ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ bookingId })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ Ticket resent successfully:', result);
+                alert('Билет переотправлен в WhatsApp!');
+            } else {
+                console.error('❌ Ticket resend failed:', result.error);
+                alert('Ошибка при переотправке билета: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error resending ticket:', error);
+            alert('Ошибка при переотправке билета: ' + error.message);
+        }
+    }
+
     cancelBooking() {
         if (!this.currentBooking) return;
 

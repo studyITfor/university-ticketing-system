@@ -1207,6 +1207,133 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
 
 // API Routes
 
+// Generate ticket endpoint
+app.post('/api/generate-ticket', async (req, res) => {
+    const { bookingId } = req.body;
+    console.log('🎫 Generate ticket request:', { bookingId, timestamp: new Date().toISOString() });
+
+    if (!bookingId) {
+        return res.status(400).json({ error: 'bookingId is required' });
+    }
+
+    try {
+        // Get booking from database
+        const bookingResult = await db.query('SELECT * FROM bookings WHERE booking_string_id = $1 OR id = $1', [bookingId]);
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        const booking = bookingResult.rows[0];
+        console.log('📊 Found booking for ticket generation:', booking);
+
+        // Generate ticket
+        let ticket = null;
+        try {
+            console.log('🎫 Generating ticket for booking:', booking.id);
+            const { generateTicketForBooking } = require('./ticket-utils');
+            ticket = await generateTicketForBooking(booking);
+            console.log('✅ Ticket generated successfully:', ticket);
+        } catch (e) {
+            console.error('❌ Ticket generation error:', e);
+            return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
+        }
+
+        // Update booking with ticket info
+        if (ticket && ticket.ticketId) {
+            await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id = $2', 
+                [ticket.ticketId, booking.id]);
+        }
+
+        return res.json({
+            success: true,
+            message: 'Ticket generated successfully',
+            ticketId: ticket && ticket.ticketId || null,
+            ticketPath: ticket && ticket.path || null
+        });
+
+    } catch (err) {
+        console.error('Generate ticket error:', err);
+        return res.status(500).json({ error: 'Failed to generate ticket', details: err.message });
+    }
+});
+
+// Resend ticket endpoint
+app.post('/api/resend-ticket', async (req, res) => {
+    const { bookingId } = req.body;
+    console.log('📱 Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
+
+    if (!bookingId) {
+        return res.status(400).json({ error: 'bookingId is required' });
+    }
+
+    try {
+        // Get booking from database
+        const bookingResult = await db.query('SELECT * FROM bookings WHERE booking_string_id = $1 OR id = $1', [bookingId]);
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        const booking = bookingResult.rows[0];
+        console.log('📊 Found booking for ticket resend:', booking);
+
+        // Generate ticket if not exists
+        let ticket = null;
+        if (booking.ticket_id) {
+            // Ticket already exists, use it
+            ticket = { ticketId: booking.ticket_id, path: `/tickets/${booking.ticket_id}.pdf` };
+        } else {
+            // Generate new ticket
+            try {
+                console.log('🎫 Generating new ticket for resend:', booking.id);
+                const { generateTicketForBooking } = require('./ticket-utils');
+                ticket = await generateTicketForBooking(booking);
+                console.log('✅ New ticket generated for resend:', ticket);
+            } catch (e) {
+                console.error('❌ Ticket generation error for resend:', e);
+                return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
+            }
+        }
+
+        // Send WhatsApp ticket
+        let whatsappResult = null;
+        try {
+            const phoneToSend = booking.user_phone || booking.phone;
+            if (phoneToSend && /^\+\d{10,15}$/.test(phoneToSend)) {
+                console.log('📱 Resending WhatsApp ticket to:', phoneToSend, 'ticket:', ticket?.ticketId);
+                const { sendWhatsAppTicket } = require('./ticket-utils');
+                whatsappResult = await sendWhatsAppTicket(phoneToSend, ticket || { ticketId: null, path: null });
+                
+                if (whatsappResult.success) {
+                    await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id=$2', 
+                        [whatsappResult.textMessageId || whatsappResult.fileMessageId, booking.id]);
+                    console.log('✅ WhatsApp ticket resent successfully:', {
+                        phone: phoneToSend,
+                        provider: whatsappResult.provider,
+                        messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+                        ticketId: ticket?.ticketId
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('❌ WhatsApp resend error:', e);
+        }
+
+        return res.json({
+            success: true,
+            message: 'Ticket resent successfully',
+            ticketId: ticket && ticket.ticketId || null,
+            ticketPath: ticket && ticket.path || null,
+            whatsappSent: whatsappResult && whatsappResult.success || false
+        });
+
+    } catch (err) {
+        console.error('Resend ticket error:', err);
+        return res.status(500).json({ error: 'Failed to resend ticket', details: err.message });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     try {
@@ -1538,10 +1665,10 @@ app.post('/api/user-payment-confirm', async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Create booking with 'paid' status directly
+    // Create booking with 'pending' status (waiting for admin confirmation)
     const result = await db.query(
       'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'paid']
+      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending']
     );
 
     const booking = result.rows[0];
@@ -1566,41 +1693,6 @@ app.post('/api/user-payment-confirm', async (req, res) => {
     await db.query('COMMIT');
     console.log('✅ User payment transaction committed successfully');
 
-    // Generate ticket
-    let ticket = null;
-    try {
-      console.log('🎫 Generating ticket for user booking:', booking.id);
-      const { generateTicketForBooking } = require('./ticket-utils');
-      ticket = await generateTicketForBooking(booking);
-      console.log('✅ Ticket generated successfully:', ticket);
-    } catch (e) {
-      console.error('❌ Ticket generation error:', e);
-    }
-
-    // Send WhatsApp ticket
-    let whatsappResult = null;
-    try {
-      const phoneToSend = whatsapp || phone;
-      if (phoneToSend && /^\+\d{10,15}$/.test(phoneToSend)) {
-        console.log('📱 Sending WhatsApp ticket to user:', phoneToSend, 'ticket:', ticket?.ticketId);
-        const { sendWhatsAppTicket } = require('./ticket-utils');
-        whatsappResult = await sendWhatsAppTicket(phoneToSend, ticket || { ticketId: null, path: null });
-        
-        if (whatsappResult.success) {
-          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
-            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, booking.id]);
-          console.log('✅ WhatsApp sent successfully to user:', {
-            phone: phoneToSend,
-            provider: whatsappResult.provider,
-            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
-            ticketId: ticket?.ticketId
-          });
-        }
-      }
-    } catch (e) {
-      console.error('❌ WhatsApp send error:', e);
-    }
-
     // Emit real-time updates
     try {
       console.log('📡 Emitting user payment confirmation events...');
@@ -1612,7 +1704,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
             bookingId: bookingId,
             table: table,
             seat: seat,
-            status: 'paid',
+            status: 'pending',
             firstName: studentName.split(' ')[0] || studentName,
             lastName: studentName.split(' ')[1] || ''
           },
@@ -1623,7 +1715,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
         const seatId = `${table}-${seat}`;
         io.emit('update-seat-status', {
           seatId: seatId,
-          status: 'paid',
+          status: 'pending',
           timestamp: Date.now()
         });
 
@@ -1638,11 +1730,9 @@ app.post('/api/user-payment-confirm', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+      message: 'Оплата подтверждена. Ожидайте подтверждения администратора.',
       bookingId: bookingId,
-      ticketId: ticket && ticket.ticketId || null,
-      ticketPath: ticket && ticket.path || null,
-      whatsappSent: whatsappResult && whatsappResult.success || false
+      status: 'pending'
     });
 
   } catch (err) {

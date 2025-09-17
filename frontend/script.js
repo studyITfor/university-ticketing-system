@@ -232,6 +232,14 @@ class StudentTicketingSystem {
             this.handlePaymentConfirmation();
         });
 
+        // Auto-populate WhatsApp field with phone number
+        document.getElementById('phone').addEventListener('input', (e) => {
+            const whatsappField = document.getElementById('whatsapp');
+            if (whatsappField && !whatsappField.value) {
+                whatsappField.value = e.target.value;
+            }
+        });
+
         // Close modals on outside click
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -371,7 +379,10 @@ class StudentTicketingSystem {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
             phone: formData.get('phone'),
-            // email removed - phone-only authentication
+            email: formData.get('email') || '',
+            whatsapp: formData.get('whatsapp') || formData.get('phone'),
+            paymentMethod: formData.get('paymentMethod') || 'card',
+            studentName: `${formData.get('firstName')} ${formData.get('lastName')}`.trim(),
             seatId: this.currentBookingSeat,
             table: this.currentBookingSeat.split('-')[0],
             seat: this.currentBookingSeat.split('-')[1],
