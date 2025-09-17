@@ -2709,6 +2709,58 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
     }
 });
 
+// Mark booking as paid by client (student "I paid" button)
+app.post('/api/book/mark-paid', async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        
+        if (!bookingId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Booking ID is required' 
+            });
+        }
+        
+        console.log(`💳 Student marking booking as paid: ${bookingId}`);
+        
+        // Update booking status using database service
+        const updatedBooking = await databaseService.updateBookingStatus(bookingId, 'awaiting_confirmation', {
+            adminId: 'student',
+            adminNotes: 'Marked as paid by client',
+            adminUserId: null,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+        
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: bookingId,
+            tableId: updatedBooking.table_number,
+            seatId: `${updatedBooking.table_number}-${updatedBooking.seat_number}`,
+            newStatus: 'awaiting_confirmation',
+            booking: updatedBooking,
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Booking ${bookingId} marked as paid by client`);
+        
+        res.json({
+            success: true,
+            message: 'Payment marked successfully',
+            status: 'awaiting_confirmation',
+            booking: updatedBooking
+        });
+        
+    } catch (error) {
+        console.error('❌ Error marking payment:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to mark payment' 
+        });
+    }
+});
+
 // Admin payment confirmation endpoint
 app.post('/api/admin/confirm-payment', async (req, res) => {
     try {

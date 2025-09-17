@@ -417,9 +417,12 @@ class StudentTicketingSystem {
                 await this.handleWhatsAppOptIn(bookingData);
             }
             
-            // Store temporary booking data for payment confirmation
-            // DON'T save to server yet - only after payment confirmation
-            this.tempBookingData = bookingData;
+            // NOW create booking immediately with 'selected' status
+            const bookingResult = await this.createBooking(bookingData);
+            this.currentBookingId = bookingResult.bookingId;
+            
+            // Store booking data for payment confirmation
+            this.tempBookingData = { ...bookingData, id: bookingResult.bookingId };
             
             // Keep seat selected (blue) until payment is confirmed
             this.selectedSeats.add(this.currentBookingSeat);
@@ -433,7 +436,7 @@ class StudentTicketingSystem {
             // Clear form
             document.getElementById('bookingForm').reset();
             
-            console.log('✅ Booking form submitted - waiting for payment confirmation');
+            console.log('✅ Booking created with selected status - waiting for payment confirmation');
         } catch (error) {
             console.error('Failed to submit booking:', error);
             alert('Ошибка при обработке бронирования: ' + error.message);
@@ -459,8 +462,8 @@ class StudentTicketingSystem {
     }
 
     async handlePaymentConfirmation() {
-        if (!this.currentBookingSeat || !this.tempBookingData) {
-            console.error('❌ No booking data available for payment confirmation');
+        if (!this.currentBookingId || !this.tempBookingData) {
+            console.error('❌ No booking ID available for payment confirmation');
             setTextSafe('#paymentError .error-message', 'Нет данных для подтверждения оплаты');
             setTextSafe('#paymentError', '', { show: true });
             return;
@@ -472,33 +475,48 @@ class StudentTicketingSystem {
             // Hide any existing error messages
             setTextSafe('#paymentError', '', { show: false });
             
-            // NOW save booking to server after payment confirmation
-            await this.saveBooking(this.tempBookingData);
-            
-            // Mark seat as pending (yellow) after successful server booking
-            this.pendingSeats.add(this.currentBookingSeat);
-            this.selectedSeats.delete(this.currentBookingSeat);
-            this.updateSeatDisplay();
-            this.updateBookingSummary();
-            
-            // Show confirmation message
-            this.hideModal('paymentModal');
-            this.showConfirmationModal();
-            
-            // Save data
-            this.saveData();
-            
-        // Start real-time updates to get admin confirmation
-        this.startRealTimeUpdates();
-        
-        // Listen for real-time booking updates
-        this.setupRealtimeUpdates();
-            
-            // Clear temporary data
-            this.tempBookingData = null;
-            this.currentBookingSeat = null;
-            
-            console.log('✅ Payment confirmed and booking saved to server');
+            // Call mark-paid endpoint to update booking status
+            const response = await fetch('/api/book/mark-paid', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    bookingId: this.currentBookingId
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Mark seat as awaiting confirmation (yellow) after successful payment marking
+                this.pendingSeats.add(this.currentBookingSeat);
+                this.selectedSeats.delete(this.currentBookingSeat);
+                this.updateSeatDisplay();
+                this.updateBookingSummary();
+                
+                // Show confirmation message
+                this.hideModal('paymentModal');
+                this.showConfirmationModal();
+                
+                // Save data
+                this.saveData();
+                
+                // Start real-time updates to get admin confirmation
+                this.startRealTimeUpdates();
+                
+                // Listen for real-time booking updates
+                this.setupRealtimeUpdates();
+                
+                // Clear temporary data
+                this.tempBookingData = null;
+                this.currentBookingSeat = null;
+                this.currentBookingId = null;
+                
+                console.log('✅ Payment marked successfully - awaiting admin confirmation');
+            } else {
+                throw new Error(result.error || 'Failed to mark payment');
+            }
         } catch (error) {
             console.error('❌ Error confirming payment:', error);
             
@@ -739,6 +757,40 @@ class StudentTicketingSystem {
     screenToElementCoords(x, y, el) {
         const rect = el.getBoundingClientRect();
         return { ex: x - rect.left, ey: y - rect.top };
+    }
+
+    async createBooking(bookingData) {
+        try {
+            // Send booking to server
+            const response = await fetch('/api/book', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(bookingData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Update local storage with server response
+                const bookings = this.getBookings();
+                bookingData.id = result.booking.id;
+                bookings[result.booking.id] = bookingData;
+                localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
+                
+                // Store booking ID for later use
+                this.currentBookingId = result.booking.id;
+                
+                console.log('✅ Booking created successfully:', result.booking);
+                return result;
+            } else {
+                throw new Error(result.error || 'Failed to create booking');
+            }
+        } catch (error) {
+            console.error('❌ Error creating booking:', error);
+            throw error;
+        }
     }
 
     async saveBooking(bookingData) {
