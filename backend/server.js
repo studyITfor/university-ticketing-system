@@ -15,6 +15,7 @@ const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
 const WhatsAppService = require('./whatsapp-service');
 const DatabaseService = require('./database-service');
+const GreenAPIService = require('./greenapi-service');
 
 const app = express();
 const server = createServer(app);
@@ -1422,6 +1423,146 @@ app.post('/api/create-booking', async (req, res) => {
     }
 });
 
+// Send confirmation code endpoint
+app.post('/api/send-confirmation-code', async (req, res) => {
+    const { phone, name, bookingId } = req.body;
+    
+    console.log('📱 Send confirmation code request:', { 
+        phone: phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : 'N/A',
+        name: name || 'N/A',
+        bookingId: bookingId || 'N/A',
+        timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!phone) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Phone number is required',
+            code: 'MISSING_PHONE'
+        });
+    }
+
+    if (!name) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Name is required',
+            code: 'MISSING_NAME'
+        });
+    }
+
+    // Validate phone format
+    if (!validateE164Phone(phone)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid phone format. Please use E.164 format (+[country code][number])',
+            code: 'INVALID_PHONE_FORMAT'
+        });
+    }
+
+    try {
+        // Generate confirmation code
+        const confirmationCode = generateConfirmationCode();
+        
+        // Create confirmation message
+        const message = `🎫 *GOLDENMIDDLE EVENT* 🎫
+
+Привет, ${name}! 👋
+
+Ваш код подтверждения: *${confirmationCode}*
+
+Используйте этот код для подтверждения бронирования.
+
+С уважением,
+Команда GOLDENMIDDLE`;
+
+        console.log(`📤 Sending confirmation code to ${phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}`);
+
+        // Send via Green API
+        const sendResult = await GreenAPIService.sendTextMessage(phone, message, {
+            maxRetries: 2,
+            retryDelay: 1000
+        });
+
+        if (sendResult.success) {
+            console.log('✅ Confirmation code sent successfully:', {
+                messageId: sendResult.messageId,
+                phone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+                provider: sendResult.provider
+            });
+
+            // Store confirmation code in database if bookingId provided
+            if (bookingId) {
+                try {
+                    const updateSql = `UPDATE bookings SET confirmation_code = $1, confirmation_sent_at = NOW() WHERE booking_string_id = $2 OR id::text = $2`;
+                    await db.query(updateSql, [confirmationCode, bookingId]);
+                    console.log('💾 Confirmation code stored in database for booking:', bookingId);
+                } catch (dbError) {
+                    console.warn('⚠️ Failed to store confirmation code in database:', dbError.message);
+                    // Don't fail the request if DB update fails
+                }
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Confirmation code sent successfully',
+                phone: phone,
+                confirmationCode: confirmationCode, // Include for development/testing
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+        } else {
+            console.error('❌ Failed to send confirmation code:', sendResult.error);
+            
+            // Return appropriate error based on the failure type
+            if (sendResult.code === 'PROVIDER_NOT_CONFIGURED') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service is temporarily unavailable',
+                    code: 'WHATSAPP_SERVICE_UNAVAILABLE',
+                    details: 'Service configuration issue'
+                });
+            }
+
+            if (sendResult.code === 'RATE_LIMIT') {
+                return res.status(429).json({
+                    success: false,
+                    error: 'Too many requests. Please try again later',
+                    code: 'RATE_LIMIT',
+                    details: 'Rate limit exceeded'
+                });
+            }
+
+            if (sendResult.code === 'AUTH_ERROR') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service authentication failed',
+                    code: 'AUTH_ERROR',
+                    details: 'Invalid credentials'
+                });
+            }
+
+            // Generic error
+            return res.status(502).json({
+                success: false,
+                error: 'Failed to send confirmation code',
+                code: 'SEND_FAILED',
+                details: sendResult.error,
+                provider: sendResult.provider
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Confirmation code endpoint error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+            details: error.message
+        });
+    }
+});
+
 // Resend ticket endpoint
 app.post('/api/resend-ticket', async (req, res) => {
   const { bookingId } = req.body;
@@ -2088,164 +2229,6 @@ app.post('/api/payments/:transaction_id/confirm', async (req, res) => {
     }
 });
 
-// ===== WHATSAPP OPT-IN API ENDPOINTS =====
-
-// Opt-in endpoint - user agrees to receive WhatsApp notifications
-app.post('/api/optin', async (req, res) => {
-  try {
-    const { name, surname, phone, optin_source = 'booking_form', booking_id = null } = req.body;
-    
-    if (!name || !surname || !phone) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: name, surname, phone' 
-      });
-    }
-    
-    // Normalize and validate phone number
-    const normalizedPhone = normalizePhone(phone);
-    if (!validateE164Phone(normalizedPhone)) {
-      return res.status(400).json({ 
-        error: 'Invalid phone number format. Please use E.164 format (+countrycode number)' 
-      });
-    }
-    
-    // Generate confirmation code
-    const confirmationCode = generateConfirmationCode();
-    
-    // Get client IP and user agent
-    const ipAddress = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'];
-    const userAgent = req.headers['user-agent'];
-    
-    // Store consent text (this would be the exact text shown to user)
-    const consentText = `Я согласен(а) получать уведомления о бронировании, напоминания и билет(ы) в WhatsApp от GOLDENMIDDLE на номер ${normalizedPhone}. Политика конфиденциальности — (link). Отписаться можно, ответив STOP.`;
-    
-    // Upsert opt-in record
-    await db.query(`
-      INSERT INTO opt_ins (phone, phone_normalized, name, confirmed, confirmation_code, optin_source, ip_address, user_agent, consent_text, booking_id, last_sent_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-      ON CONFLICT (phone) 
-      DO UPDATE SET 
-        name = EXCLUDED.name,
-        confirmation_code = EXCLUDED.confirmation_code,
-        confirmed = false,
-        optin_source = EXCLUDED.optin_source,
-        ip_address = EXCLUDED.ip_address,
-        user_agent = EXCLUDED.user_agent,
-        consent_text = EXCLUDED.consent_text,
-        booking_id = EXCLUDED.booking_id,
-        last_sent_at = now(),
-        unsubscribed = false,
-        unsubscribed_at = NULL
-    `, [normalizedPhone, normalizedPhone, `${name} ${surname}`, false, confirmationCode, optin_source, ipAddress, userAgent, consentText, booking_id]);
-    
-    // Send confirmation code via WhatsApp
-    try {
-      const sendResult = await whatsappService.sendConfirmationCode(normalizedPhone, confirmationCode, name);
-      
-      if (!sendResult.success) {
-        console.error('Failed to send WhatsApp confirmation:', sendResult.error);
-        
-        // Handle different error types with appropriate responses
-        if (sendResult.code === 'PROVIDER_NOT_CONFIGURED') {
-          // In development mode, return success with a warning
-          if (sendResult.isDevelopmentMode) {
-            console.warn('Development mode: WhatsApp provider not configured, returning mock success');
-            return res.json({
-              success: true,
-              message: 'Confirmation code generated (WhatsApp not configured in development)',
-              phone: normalizedPhone,
-              confirmationCode: confirmationCode, // Include code for development testing
-              developmentMode: true
-            });
-          } else {
-            // In production, return proper error
-            return res.status(503).json({ 
-              success: false,
-              error: 'WhatsApp service is temporarily unavailable. Please contact support.',
-              code: 'WHATSAPP_SERVICE_UNAVAILABLE',
-              details: 'Service configuration issue'
-            });
-          }
-        } else {
-          // Other WhatsApp errors
-          return res.status(500).json({ 
-            success: false,
-            error: 'Failed to send confirmation code. Please try again.',
-            code: 'WHATSAPP_SEND_FAILED',
-            details: sendResult.error
-          });
-        }
-      }
-    } catch (whatsappError) {
-      console.error('WhatsApp service error:', whatsappError);
-      return res.status(500).json({ 
-        success: false,
-        error: 'WhatsApp service is not available. Please contact support.',
-        code: 'WHATSAPP_SERVICE_ERROR',
-        details: whatsappError.message
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Confirmation code sent to WhatsApp',
-      phone: normalizedPhone
-    });
-    
-  } catch (error) {
-    console.error('Opt-in error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      details: error.message 
-    });
-  }
-});
-
-// Confirm opt-in endpoint - user enters confirmation code
-app.post('/api/confirm-optin', async (req, res) => {
-  try {
-    const { phone, code } = req.body;
-    
-    if (!phone || !code) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: phone, code' 
-      });
-    }
-    
-    const normalizedPhone = normalizePhone(phone);
-    
-    // Find opt-in record
-    const result = await db.query(`
-      SELECT * FROM opt_ins 
-      WHERE phone = $1 AND confirmation_code = $2 AND confirmed = false
-    `, [normalizedPhone, code]);
-    
-    if (result.rows.length === 0) {
-      return res.status(400).json({ 
-        error: 'Invalid confirmation code or phone number' 
-      });
-    }
-    
-    // Mark as confirmed
-    await db.query(`
-      UPDATE opt_ins 
-      SET confirmed = true, confirmed_at = now() 
-      WHERE phone = $1 AND confirmation_code = $2
-    `, [normalizedPhone, code]);
-    
-    res.json({
-      success: true,
-      message: 'Opt-in confirmed successfully'
-    });
-    
-  } catch (error) {
-    console.error('Confirm opt-in error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      details: error.message 
-    });
-  }
-});
 
 // WhatsApp webhook endpoint - handle incoming messages (STOP, etc.)
 app.post('/webhook/whatsapp-inbound', async (req, res) => {

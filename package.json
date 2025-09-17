@@ -11,7 +11,15 @@
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "test:optin": "playwright test tests/e2e/whatsapp-optin.spec.js",
-    "test:postman": "newman run postman/whatsapp-optin-collection.json"
+    "test:postman": "newman run postman/whatsapp-optin-collection.json",
+    "test:reliable": "node scripts/run-tests.js",
+    "test:reliable:headed": "node scripts/run-tests.js --headed",
+    "migrate:reliable": "node scripts/run-migrations.js",
+    "migrate:force": "node scripts/run-migrations.js --force",
+    "server:reliable": "node scripts/start-server.js",
+    "server:reliable:fg": "node scripts/start-server.js --foreground",
+    "cleanup": "node -e \"require('./scripts/command-runner').cleanup()\"",
+    "logs": "node -e \"console.log(JSON.stringify(require('./scripts/command-runner').getLogs(), null, 2))\""
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

@@ -13,11 +13,21 @@ class WhatsAppService {
   }
 
   detectProvider() {
+    console.log('🔍 WhatsApp Provider Detection:');
+    console.log('  TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? 'SET' : 'NOT SET');
+    console.log('  TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? 'SET' : 'NOT SET');
+    console.log('  GREEN_API_KEY:', process.env.GREEN_API_KEY ? 'SET' : 'NOT SET');
+    console.log('  GREEN_API_TOKEN:', process.env.GREEN_API_TOKEN ? 'SET' : 'NOT SET');
+    console.log('  GREEN_API_INSTANCE_ID:', process.env.GREEN_API_INSTANCE_ID ? 'SET' : 'NOT SET');
+    
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+      console.log('  ✅ Selected provider: twilio');
       return 'twilio';
     } else if (process.env.GREEN_API_KEY) {
+      console.log('  ✅ Selected provider: green_api');
       return 'green_api';
     }
+    console.log('  ❌ No provider configured - returning none');
     return 'none';
   }
 
