@@ -332,31 +332,7 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
-// Get all bookings for admin panel
-app.get('/api/bookings', async (req, res) => {
-    try {
-        console.log('🔍 Admin requesting all bookings...');
-        
-        const result = await db.query(`
-            SELECT b.*, u.phone 
-            FROM bookings b 
-            LEFT JOIN users u ON b.user_phone = u.phone 
-            ORDER BY b.created_at DESC
-        `);
-        
-        console.log(`✅ Found ${result.rows.length} bookings for admin`);
-        
-        res.json(result.rows);
-        
-    } catch (error) {
-        console.error('❌ Error fetching bookings:', error);
-        res.status(500).json({
-            status: 'error',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
+// Get all bookings for admin panel - moved to line 1780 to avoid duplication
 
 // Delete booking endpoint
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
@@ -2163,12 +2139,25 @@ app.post('/api/optin', async (req, res) => {
     `, [normalizedPhone, normalizedPhone, `${name} ${surname}`, false, confirmationCode, optin_source, ipAddress, userAgent, consentText, booking_id]);
     
     // Send confirmation code via WhatsApp
-    const sendResult = await whatsappService.sendConfirmationCode(normalizedPhone, confirmationCode, name);
-    
-    if (!sendResult.success) {
-      console.error('Failed to send WhatsApp confirmation:', sendResult.error);
+    try {
+      const sendResult = await whatsappService.sendConfirmationCode(normalizedPhone, confirmationCode, name);
+      
+      if (!sendResult.success) {
+        console.error('Failed to send WhatsApp confirmation:', sendResult.error);
+        return res.status(500).json({ 
+          success: false,
+          error: 'Failed to send confirmation code. Please try again.',
+          code: 'WHATSAPP_SEND_FAILED',
+          details: sendResult.error
+        });
+      }
+    } catch (whatsappError) {
+      console.error('WhatsApp service error:', whatsappError);
       return res.status(500).json({ 
-        error: 'Failed to send confirmation code. Please try again.' 
+        success: false,
+        error: 'WhatsApp service is not available. Please contact support.',
+        code: 'WHATSAPP_SERVICE_ERROR',
+        details: whatsappError.message
       });
     }
     

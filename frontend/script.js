@@ -480,13 +480,25 @@ class StudentTicketingSystem {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
                     bookingId: this.currentBookingId
                 })
             });
 
-            const result = await response.json();
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type') || '';
+            let result;
+            
+            if (contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                // Received HTML or unexpected content
+                const text = await response.text();
+                console.error('Unexpected non-JSON response from mark-paid', response.status, text.slice(0, 200));
+                throw new Error(`Server returned an unexpected response (${response.status}). Please contact support.`);
+            }
 
             if (result.success) {
                 // Mark seat as awaiting confirmation (yellow) after successful payment marking
@@ -762,15 +774,27 @@ class StudentTicketingSystem {
     async createBooking(bookingData) {
         try {
             // Send booking to server
-            const response = await fetch('/api/book', {
+            const response = await fetch('/api/create-booking', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify(bookingData)
             });
 
-            const result = await response.json();
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type') || '';
+            let result;
+            
+            if (contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                // Received HTML or unexpected content
+                const text = await response.text();
+                console.error('Unexpected non-JSON response', response.status, text.slice(0, 200));
+                throw new Error(`Server returned an unexpected response (${response.status}). Please contact support.`);
+            }
 
             if (result.success) {
                 // Update local storage with server response
