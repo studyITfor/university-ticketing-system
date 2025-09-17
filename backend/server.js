@@ -1478,11 +1478,8 @@ app.post('/api/send-confirmation-code', async (req, res) => {
 
         console.log(`📤 Sending confirmation code to ${phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}`);
 
-        // Send via Green API
-        const sendResult = await GreenAPIService.sendTextMessage(phone, message, {
-            maxRetries: 2,
-            retryDelay: 1000
-        });
+        // Send via WhatsApp service (Green API)
+        const sendResult = await whatsappService.sendMessage(phone, message);
 
         if (sendResult.success) {
             console.log('✅ Confirmation code sent successfully:', {
@@ -1554,6 +1551,132 @@ app.post('/api/send-confirmation-code', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Confirmation code endpoint error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+            details: error.message
+        });
+    }
+});
+
+// WhatsApp Opt-in endpoint
+app.post('/api/optin', async (req, res) => {
+    const { name, surname, phone, optin_source, booking_id } = req.body;
+    
+    console.log('📱 WhatsApp opt-in request:', { 
+        name: name || 'N/A',
+        surname: surname || 'N/A',
+        phone: phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : 'N/A',
+        optin_source: optin_source || 'N/A',
+        booking_id: booking_id || 'N/A',
+        timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!name || !surname || !phone) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Name, surname, and phone are required',
+            code: 'MISSING_REQUIRED_FIELDS'
+        });
+    }
+
+    // Validate phone format
+    if (!validateE164Phone(phone)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid phone format. Please use E.164 format (+[country code][number])',
+            code: 'INVALID_PHONE_FORMAT'
+        });
+    }
+
+    try {
+        // Generate confirmation code
+        const confirmationCode = generateConfirmationCode();
+        const fullName = `${name} ${surname}`;
+        
+        // Send confirmation code via Green API
+        const sendResult = await whatsappService.sendConfirmationCode(phone, confirmationCode, fullName);
+        
+        if (sendResult.success) {
+            console.log('✅ WhatsApp opt-in successful:', {
+                phone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+
+            // Store opt-in in database
+            try {
+                const insertSql = `
+                    INSERT INTO opt_ins (name, surname, phone, optin_source, confirmation_code, booking_id, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (phone) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        surname = EXCLUDED.surname,
+                        optin_source = EXCLUDED.optin_source,
+                        confirmation_code = EXCLUDED.confirmation_code,
+                        booking_id = EXCLUDED.booking_id,
+                        updated_at = NOW()
+                `;
+                await db.query(insertSql, [name, surname, phone, optin_source, confirmationCode, booking_id]);
+                console.log('💾 Opt-in stored in database');
+            } catch (dbError) {
+                console.warn('⚠️ Failed to store opt-in in database:', dbError.message);
+                // Don't fail the request if DB update fails
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Confirmation code sent successfully',
+                phone: phone,
+                confirmationCode: confirmationCode, // Include for development/testing
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+        } else {
+            console.error('❌ WhatsApp opt-in failed:', sendResult.error);
+            
+            // Return appropriate error based on the failure type
+            if (sendResult.code === 'INVALID_PHONE_FORMAT') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid phone format',
+                    code: 'INVALID_PHONE_FORMAT',
+                    details: sendResult.error
+                });
+            }
+
+            if (sendResult.code === 'quota_exceeded' || sendResult.code === 'rate_limit') {
+                return res.status(429).json({
+                    success: false,
+                    error: 'Too many requests. Please try again later',
+                    code: 'RATE_LIMIT',
+                    details: 'Rate limit exceeded'
+                });
+            }
+
+            if (sendResult.code === 'auth_error' || sendResult.code === 'unauthorized') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service authentication failed',
+                    code: 'AUTH_ERROR',
+                    details: 'Invalid credentials'
+                });
+            }
+
+            // Generic error
+            return res.status(502).json({
+                success: false,
+                error: 'Failed to send confirmation code',
+                code: 'SEND_FAILED',
+                details: sendResult.error,
+                provider: sendResult.provider
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Opt-in endpoint error:', error);
         return res.status(500).json({
             success: false,
             error: 'Internal server error',
