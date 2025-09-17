@@ -173,6 +173,8 @@ class StudentTicketingSystem {
             console.log('🔍 DEBUG: Event target:', e.target);
             console.log('🔍 DEBUG: Event type:', e.type);
             console.log('🔍 DEBUG: Current booking seat:', this.currentBookingSeat);
+            console.log('🔍 DEBUG: Modal ready for submission:', this.modalReadyForSubmission);
+            console.log('🔍 DEBUG: Is submitting:', this.isSubmitting);
             
             // Prevent duplicate submissions
             if (this.isSubmitting) {
@@ -183,14 +185,15 @@ class StudentTicketingSystem {
             // Prevent submission if no seat is selected (shouldn't happen, but safety check)
             if (!this.currentBookingSeat) {
                 console.log('⚠️ DEBUG: No seat selected for booking!');
+                alert('Ошибка: Не выбрано место для бронирования. Пожалуйста, выберите место сначала.');
                 return;
             }
             
-            // Prevent premature submission (before user has time to fill form)
-            if (!this.modalReadyForSubmission) {
-                console.log('⚠️ DEBUG: Form submitted too early - modal not ready yet!');
-                return;
-            }
+            // Remove the premature submission check - allow immediate submission
+            // if (!this.modalReadyForSubmission) {
+            //     console.log('⚠️ DEBUG: Form submitted too early - modal not ready yet!');
+            //     return;
+            // }
             
             // Check if form has any values before processing
             const form = document.getElementById('bookingForm');
@@ -293,10 +296,21 @@ class StudentTicketingSystem {
     }
 
     showBookingModal(seatId) {
+        console.log('🔍 DEBUG: showBookingModal called with seatId:', seatId);
+        
         const [table, seat] = seatId.split('-');
         
-        document.getElementById('seatInfo').textContent = `Стол ${table}, Место ${seat}`;
-        document.getElementById('seatPrice').textContent = `${this.ticketPrice.toLocaleString()} Сом`;
+        const seatInfoElement = document.getElementById('seatInfo');
+        const seatPriceElement = document.getElementById('seatPrice');
+        
+        if (!seatInfoElement || !seatPriceElement) {
+            console.error('❌ DEBUG: Modal elements not found!');
+            alert('Ошибка: Элементы модального окна не найдены. Пожалуйста, обновите страницу.');
+            return;
+        }
+        
+        seatInfoElement.textContent = `Стол ${table}, Место ${seat}`;
+        seatPriceElement.textContent = `${this.ticketPrice.toLocaleString()} Сом`;
         
         // Store current seat for booking
         this.currentBookingSeat = seatId;
@@ -305,22 +319,32 @@ class StudentTicketingSystem {
         
         // Reset form and prepare for user input
         const form = document.getElementById('bookingForm');
-        form.reset();
-        this.modalReadyForSubmission = false;
+        if (form) {
+            form.reset();
+        } else {
+            console.error('❌ DEBUG: Booking form not found!');
+            alert('Ошибка: Форма бронирования не найдена. Пожалуйста, обновите страницу.');
+            return;
+        }
+        
+        this.modalReadyForSubmission = true; // Allow immediate submission
         this.isSubmitting = false; // Reset submission flag for new booking
         
         this.showModal('bookingModal');
         
-        // Allow submission after a short delay to ensure user interaction
-        setTimeout(() => {
-            this.modalReadyForSubmission = true;
-            console.log('🔍 DEBUG: Modal ready for form submission');
-        }, 1000);
+        console.log('🔍 DEBUG: Modal opened successfully');
     }
 
     async handleBookingSubmission() {
+        console.log('🔍 DEBUG: handleBookingSubmission called');
         const form = document.getElementById('bookingForm');
         console.log('🔍 DEBUG: Form element found:', !!form);
+        
+        if (!form) {
+            console.error('❌ DEBUG: Booking form not found!');
+            alert('Ошибка: Форма бронирования не найдена. Пожалуйста, обновите страницу.');
+            return;
+        }
         
         // Debug: Check form inputs directly
         const firstNameInput = document.getElementById('firstName');
@@ -487,10 +511,13 @@ class StudentTicketingSystem {
         // Duplicate phone validation removed
 
         if (errors.length > 0) {
+            console.log('❌ DEBUG: Validation errors:', errors);
             alert('Пожалуйста, проверьте данные:\n' + errors.join('\n'));
+            this.isSubmitting = false; // Reset submission flag on validation failure
             return false;
         }
 
+        console.log('✅ DEBUG: Validation passed');
         return true;
     }
 
@@ -1653,6 +1680,9 @@ Socket.IO Diagnostics:
     // Handle seat click/touch for booking
     handleSeatClick(seatElement, event) {
         try {
+            console.log('🔍 DEBUG: handleSeatClick called with element:', seatElement);
+            console.log('🔍 DEBUG: Seat element dataset:', seatElement.dataset);
+            
             const table = parseInt(seatElement.dataset.table);
             const seat = parseInt(seatElement.dataset.seat);
             const seatId = `${table}-${seat}`;
