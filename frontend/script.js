@@ -1,33 +1,3 @@
-// Safe DOM text setter helper function
-function setTextSafe(selectorOrEl, text, { show = true } = {}) {
-    try {
-        const el = (typeof selectorOrEl === 'string') ? document.querySelector(selectorOrEl) : selectorOrEl;
-        if (el) {
-            el.textContent = text;
-            if (show) el.style.display = '';
-            return true;
-        }
-        console.warn('setTextSafe: element not found', selectorOrEl);
-        // fallback: create a single #paymentError element if missing
-        const fallbackId = 'paymentError';
-        let fallback = document.getElementById(fallbackId);
-        if (!fallback) {
-            fallback = document.createElement('div');
-            fallback.id = fallbackId;
-            fallback.className = 'alert alert-error';
-            fallback.setAttribute('role','alert');
-            fallback.setAttribute('aria-live', 'polite');
-            document.body.appendChild(fallback);
-        }
-        fallback.textContent = text;
-        if (show) fallback.style.display = '';
-        return false;
-    } catch (err) {
-        console.error('setTextSafe error', err);
-        return false;
-    }
-}
-
 // Main Ticketing System for Students
 class StudentTicketingSystem {
     constructor() {
@@ -266,7 +236,6 @@ class StudentTicketingSystem {
                 }
             });
         });
-
     }
 
     generateHallLayout() {
@@ -377,7 +346,6 @@ class StudentTicketingSystem {
             firstName: formData.get('firstName'),
             lastName: formData.get('lastName'),
             phone: formData.get('phone'),
-            whatsappOptin: false, // WhatsApp opt-in disabled
             // email removed - phone-only authentication
             seatId: this.currentBookingSeat,
             table: this.currentBookingSeat.split('-')[0],
@@ -397,12 +365,9 @@ class StudentTicketingSystem {
         }
 
         try {
-            // Create booking immediately with 'selected' status
-            const bookingResult = await this.createBooking(bookingData);
-            this.currentBookingId = bookingResult.bookingId;
-            
-            // Store booking data for payment confirmation
-            this.tempBookingData = { ...bookingData, id: bookingResult.bookingId };
+            // Store temporary booking data for payment confirmation
+            // DON'T save to server yet - only after payment confirmation
+            this.tempBookingData = bookingData;
             
             // Keep seat selected (blue) until payment is confirmed
             this.selectedSeats.add(this.currentBookingSeat);
@@ -416,7 +381,7 @@ class StudentTicketingSystem {
             // Clear form
             document.getElementById('bookingForm').reset();
             
-            console.log('✅ Booking created with selected status - waiting for payment confirmation');
+            console.log('✅ Booking form submitted - waiting for payment confirmation');
         } catch (error) {
             console.error('Failed to submit booking:', error);
             alert('Ошибка при обработке бронирования: ' + error.message);
@@ -442,188 +407,41 @@ class StudentTicketingSystem {
     }
 
     async handlePaymentConfirmation() {
-        if (!this.currentBookingId || !this.tempBookingData) {
-            console.error('❌ No booking ID available for payment confirmation');
-            setTextSafe('#paymentError .error-message', 'Нет данных для подтверждения оплаты');
-            setTextSafe('#paymentError', '', { show: true });
+        if (!this.currentBookingSeat || !this.tempBookingData) {
+            console.error('❌ No booking data available for payment confirmation');
             return;
         }
 
         try {
             console.log('💳 Processing payment confirmation...');
             
-            // Hide any existing error messages
-            setTextSafe('#paymentError', '', { show: false });
+            // NOW save booking to server after payment confirmation
+            await this.saveBooking(this.tempBookingData);
             
-            // Call mark-paid endpoint to update booking status
-            const response = await fetch('/api/book/mark-paid', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    bookingId: this.currentBookingId
-                })
-            });
-
-            // Check if response is JSON
-            const contentType = response.headers.get('content-type') || '';
-            let result;
+            // Mark seat as pending (yellow) after successful server booking
+            this.pendingSeats.add(this.currentBookingSeat);
+            this.selectedSeats.delete(this.currentBookingSeat);
+            this.updateSeatDisplay();
+            this.updateBookingSummary();
             
-            if (contentType.includes('application/json')) {
-                result = await response.json();
-            } else {
-                // Received HTML or unexpected content
-                const text = await response.text();
-                console.error('Unexpected non-JSON response from mark-paid', response.status, text.slice(0, 200));
-                throw new Error(`Server returned an unexpected response (${response.status}). Please contact support.`);
-            }
-
-            if (result.success) {
-                // Mark seat as awaiting confirmation (yellow) after successful payment marking
-                this.pendingSeats.add(this.currentBookingSeat);
-                this.selectedSeats.delete(this.currentBookingSeat);
-                this.updateSeatDisplay();
-                this.updateBookingSummary();
-                
-                // Show confirmation message
-                this.hideModal('paymentModal');
-                this.showConfirmationModal();
-                
-                // Save data
-                this.saveData();
-                
-                // Start real-time updates to get admin confirmation
-                this.startRealTimeUpdates();
-                
-                // Listen for real-time booking updates
-                this.setupRealtimeUpdates();
-                
-                // Clear temporary data
-                this.tempBookingData = null;
-                this.currentBookingSeat = null;
-                this.currentBookingId = null;
-                
-                console.log('✅ Payment marked successfully - awaiting admin confirmation');
-            } else {
-                throw new Error(result.error || 'Failed to mark payment');
-            }
+            // Show confirmation message
+            this.hideModal('paymentModal');
+            this.showConfirmationModal();
+            
+            // Save data
+            this.saveData();
+            
+            // Start real-time updates to get admin confirmation
+            this.startRealTimeUpdates();
+            
+            // Clear temporary data
+            this.tempBookingData = null;
+            this.currentBookingSeat = null;
+            
+            console.log('✅ Payment confirmed and booking saved to server');
         } catch (error) {
             console.error('❌ Error confirming payment:', error);
-            
-            // Log error to backend if possible
-            this.logClientError('payment_confirmation_error', error.message, error.stack);
-            
-            // Show user-friendly error message
-            const errorMessage = `Ошибка при подтверждении оплаты: ${error.message}`;
-            setTextSafe('#paymentError', errorMessage, { show: true });
-            
-            // Auto-hide error after 10 seconds
-            setTimeout(() => {
-                setTextSafe('#paymentError', '', { show: false });
-            }, 10000);
-        }
-    }
-
-    // Retry payment confirmation
-    retryPaymentConfirmation() {
-        setTextSafe('#paymentError', '', { show: false });
-        this.handlePaymentConfirmation();
-    }
-
-    // Log client errors to backend
-    async logClientError(errorType, message, stack) {
-        try {
-            await fetch('/api/log-client-error', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    errorType,
-                    message,
-                    stack,
-                    url: window.location.href,
-                    userAgent: navigator.userAgent,
-                    timestamp: new Date().toISOString()
-                })
-            });
-        } catch (logError) {
-            console.warn('Failed to log client error to backend:', logError);
-        }
-    }
-
-    // Setup real-time updates for booking status changes
-    setupRealtimeUpdates() {
-        if (this.socket) {
-            // Listen for booking updates
-            this.socket.on('booking.updated', (data) => {
-                console.log('📡 Received booking update:', data);
-                this.handleBookingUpdate(data);
-            });
-        }
-    }
-
-    // Handle real-time booking updates
-    handleBookingUpdate(data) {
-        const { bookingId, tableId, seatId, newStatus, booking } = data;
-        
-        if (seatId) {
-            // Update the specific seat/table status
-            const seatElement = document.querySelector(`[data-seat-id="${seatId}"]`);
-            const tableArea = document.querySelector(`[data-table="${tableId}"]`);
-            
-            if (seatElement) {
-                this.updateSeatStatus(seatElement, newStatus);
-            }
-            
-            if (tableArea) {
-                this.updateTableStatus(tableArea, newStatus);
-            }
-        }
-    }
-
-    // Update seat status based on booking status
-    updateSeatStatus(seatElement, status) {
-        // Remove all status classes
-        seatElement.classList.remove('selected', 'pending', 'booked', 'awaiting');
-        
-        // Add appropriate class based on status
-        switch (status) {
-            case 'selected':
-                seatElement.classList.add('selected');
-                seatElement.textContent = 'Выбрано';
-                break;
-            case 'awaiting_confirmation':
-                seatElement.classList.add('awaiting');
-                seatElement.textContent = 'Ожидает подтверждения';
-                break;
-            case 'booked_paid':
-                seatElement.classList.add('booked');
-                seatElement.textContent = 'Забронировано (оплачено)';
-                break;
-            default:
-                seatElement.textContent = seatElement.dataset.seat || '';
-        }
-    }
-
-    // Update table status based on booking status
-    updateTableStatus(tableArea, status) {
-        // Remove all status classes
-        tableArea.classList.remove('selected', 'pending', 'booked', 'awaiting');
-        
-        // Add appropriate class based on status
-        switch (status) {
-            case 'selected':
-                tableArea.classList.add('selected');
-                break;
-            case 'awaiting_confirmation':
-                tableArea.classList.add('awaiting');
-                break;
-            case 'booked_paid':
-                tableArea.classList.add('booked');
-                break;
+            alert('Ошибка при подтверждении оплаты: ' + error.message);
         }
     }
 
@@ -749,52 +567,6 @@ class StudentTicketingSystem {
     screenToElementCoords(x, y, el) {
         const rect = el.getBoundingClientRect();
         return { ex: x - rect.left, ey: y - rect.top };
-    }
-
-    async createBooking(bookingData) {
-        try {
-            // Send booking to server
-            const response = await fetch('/api/create-booking', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(bookingData)
-            });
-
-            // Check if response is JSON
-            const contentType = response.headers.get('content-type') || '';
-            let result;
-            
-            if (contentType.includes('application/json')) {
-                result = await response.json();
-            } else {
-                // Received HTML or unexpected content
-                const text = await response.text();
-                console.error('Unexpected non-JSON response', response.status, text.slice(0, 200));
-                throw new Error(`Server returned an unexpected response (${response.status}). Please contact support.`);
-            }
-
-            if (result.success) {
-                // Update local storage with server response
-                const bookings = this.getBookings();
-                bookingData.id = result.booking.id;
-                bookings[result.booking.id] = bookingData;
-                localStorage.setItem('zolotayaSeredinaBookings', JSON.stringify(bookings));
-                
-                // Store booking ID for later use
-                this.currentBookingId = result.booking.id;
-                
-                console.log('✅ Booking created successfully:', result.booking);
-                return result;
-            } else {
-                throw new Error(result.error || 'Failed to create booking');
-            }
-        } catch (error) {
-            console.error('❌ Error creating booking:', error);
-            throw error;
-        }
     }
 
     async saveBooking(bookingData) {
@@ -2097,16 +1869,13 @@ Socket.IO Diagnostics:
     }
 
 
-
-
-
-
-
 }
 
 // Initialize the system when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     const system = new StudentTicketingSystem();
+    // Make system available globally for debugging and external access
+    window.studentTicketingSystem = system;
     // Initialize seating plan image zoom functionality
     initializeSeatingPlanImage();
 });
@@ -2130,8 +1899,6 @@ function initializeSeatingPlanImage() {
     image.addEventListener('load', () => {
         console.log('Seating plan image loaded successfully:', image.src);
         createInteractiveTableAreas();
-        // Cleanup any existing overlays
-        cleanupTableOverlays();
     });
 
     // Create clickable table areas
@@ -2154,8 +1921,7 @@ function initializeSeatingPlanImage() {
             tableArea.style.top = `${pos.y}%`;
             tableArea.style.width = `${pos.width}px`;
             tableArea.style.height = `${pos.height}px`;
-            // Hide seat numbers - only show table areas for selection
-            // tableArea.textContent = pos.tableNumber;
+            tableArea.textContent = pos.tableNumber;
             tableArea.dataset.table = pos.tableNumber;
             tableArea.dataset.seat = pos.seatNumber;
             
@@ -2201,7 +1967,14 @@ function initializeSeatingPlanImage() {
     
     // Handle table click
     function handleTableClick(tableNumber, seatNumber, tableElement) {
-        // Removed selection overlay - no visual feedback for selected tables
+        // Remove previous selection
+        document.querySelectorAll('.table-area.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Select current table
+        tableElement.classList.add('selected');
+        
         // Trigger booking for this table
         if (window.selectTable) {
             window.selectTable(tableNumber, seatNumber);
@@ -2216,21 +1989,21 @@ function initializeSeatingPlanImage() {
     
     // Update table statuses based on existing bookings
     function updateTableStatuses() {
-        // Removed booked table overlays - no visual indication of booked tables
-        // Table booking status is handled internally without visual overlays
-    }
-    
-    // Cleanup function to remove any existing selected/booked overlays
-    function cleanupTableOverlays() {
-        document.querySelectorAll('.table-area.selected, .table-area.booked').forEach(el => {
-            el.classList.remove('selected', 'booked');
-            el.textContent = '';
+        // This would be called when booking data is loaded
+        // For now, we'll mark some tables as booked for demonstration
+        const bookedTables = [1, 5, 12, 18, 25, 31]; // Example booked tables
+        
+        bookedTables.forEach(tableNum => {
+            const tableArea = document.querySelector(`[data-table="${tableNum}"]`);
+            if (tableArea) {
+                tableArea.classList.add('booked');
+                tableArea.textContent = '✗';
+            }
         });
     }
     
-    // Make functions available globally
+    // Make updateTableStatuses available globally
     window.updateTableStatuses = updateTableStatuses;
-    window.cleanupTableOverlays = cleanupTableOverlays;
     
     // Create selectTable function to integrate with existing booking system
     window.selectTable = function(tableNumber, seatNumber) {
