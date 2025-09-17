@@ -1505,6 +1505,11 @@ app.post('/api/confirm-payment', async (req, res) => {
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
   try {
+    // First, let's check what bookings exist in the database
+    console.log('🔍 Checking all bookings in database...');
+    const allBookingsRes = await db.query('SELECT id, booking_string_id, first_name, last_name, status FROM bookings ORDER BY created_at DESC LIMIT 10');
+    console.log('🔍 All bookings in database:', allBookingsRes.rows);
+    
     // find booking by string id or numeric id
     const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
     const findRes = await db.query(findSql, [bookingId]);
@@ -1512,6 +1517,8 @@ app.post('/api/confirm-payment', async (req, res) => {
     console.log('🔍 Booking lookup result:', {
       found: !!booking,
       bookingId: bookingId,
+      query: findSql,
+      params: [bookingId],
       bookingData: booking ? {
         id: booking.id,
         booking_string_id: booking.booking_string_id,

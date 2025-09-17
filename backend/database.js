@@ -72,6 +72,63 @@ if (!connectionString) {
       if (text.includes('SELECT * FROM bookings WHERE seat')) {
         return { rows: [] }; // No existing bookings for mock
       }
+      if (text.includes('SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1')) {
+        // Handle confirm-payment query
+        console.log('🔍 Mock DB: Looking for booking with string ID or numeric ID:', params[0]);
+        console.log('🔍 Mock DB: Available bookings:', Array.from(mockData.bookingsByStringId.keys()));
+        const booking = mockData.bookingsByStringId.get(params[0]) || mockData.bookings.get(parseInt(params[0]));
+        if (booking) {
+          console.log('✅ Mock DB: Found booking for confirm-payment:', booking);
+          return { rows: [booking] };
+        }
+        console.log('❌ Mock DB: Booking not found for confirm-payment');
+        return { rows: [] };
+      }
+      if (text.includes('SELECT id, booking_string_id, first_name, last_name, status FROM bookings ORDER BY created_at DESC LIMIT 10')) {
+        // Handle debug query
+        const bookings = Array.from(mockData.bookingsByStringId.values());
+        console.log('🔍 Mock DB: Returning all bookings for debug:', bookings);
+        return { rows: bookings };
+      }
+      if (text.includes('INSERT INTO payments')) {
+        // Handle payment insertion
+        const payment = {
+          id: mockData.nextBookingId++,
+          transaction_id: params[0],
+          booking_id: params[1],
+          user_phone: params[2],
+          amount: params[3],
+          status: params[4],
+          provider: params[5],
+          raw_payload: params[6],
+          created_at: new Date().toISOString()
+        };
+        return { rows: [payment] };
+      }
+      if (text.includes('UPDATE bookings SET status=$1, updated_at=now() WHERE id=$2')) {
+        // Handle booking status update
+        const booking = mockData.bookings.get(params[1]);
+        if (booking) {
+          booking.status = params[0];
+          booking.updated_at = new Date().toISOString();
+          console.log('✅ Mock DB: Updated booking status:', booking);
+          return { rows: [booking] };
+        }
+        return { rows: [] };
+      }
+      if (text.includes('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3')) {
+        // Handle WhatsApp update
+        const booking = mockData.bookings.get(params[2]);
+        if (booking) {
+          booking.whatsapp_sent = true;
+          booking.whatsapp_message_id = params[0];
+          booking.ticket_id = params[1];
+          booking.updated_at = new Date().toISOString();
+          console.log('✅ Mock DB: Updated booking WhatsApp info:', booking);
+          return { rows: [booking] };
+        }
+        return { rows: [] };
+      }
       return { rows: [] };
     }, 
     getSeatStatuses: async () => [], 
