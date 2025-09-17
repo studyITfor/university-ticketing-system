@@ -2358,12 +2358,8 @@ app.post('/webhook/whatsapp-inbound', async (req, res) => {
   try {
     let phone, body;
     
-    // Handle different webhook formats (Twilio vs Green API)
-    if (req.body.From) {
-      // Twilio format
-      phone = req.body.From.replace('whatsapp:', '');
-      body = req.body.Body;
-    } else if (req.body.senderData) {
+    // Handle Green API webhook format
+    if (req.body.senderData) {
       // Green API format
       phone = req.body.senderData.sender.replace('@c.us', '');
       body = req.body.messageData.textMessageData?.textMessage || '';
