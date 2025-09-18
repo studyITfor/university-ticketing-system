@@ -286,7 +286,7 @@ async function emitSeatUpdate() {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed') {
                     status = 'reserved';
-                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
+                } else if (booking.status === 'pending') {
                     status = 'pending';
                 } else if (booking.status === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
@@ -844,7 +844,7 @@ function emitSeatBulkUpdate() {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
-                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
+                } else if (booking.status === 'pending') {
                     status = 'pending';
                 } else if (booking.status === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
@@ -1499,6 +1499,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/create-booking', async (req, res) => {
     try {
         const bookingData = req.body;
+        console.log('Create booking payload:', req.body);
         
         // Generate unique booking ID
         const bookingId = 'BK' + Date.now().toString(36).toUpperCase();
@@ -1525,6 +1526,11 @@ app.post('/api/create-booking', async (req, res) => {
         if (!bookingData.table || !bookingData.seat) {
             console.log('❌ Missing table or seat fields:', bookingData);
             return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
+        }
+        
+        // Validate student name
+        if (!bookingData.studentName) {
+            return res.status(400).json({ error: 'Student name is required.' });
         }
         
         // Validate WhatsApp number (E.164 format)
@@ -1752,10 +1758,10 @@ app.post('/api/user-payment-confirm', async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Create booking with 'pending_confirmation' status (waiting for admin confirmation)
+    // Create booking with 'pending' status (waiting for admin confirmation)
     const result = await db.query(
       'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending_confirmation']
+      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending']
     );
 
     const booking = result.rows[0];
@@ -1766,7 +1772,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
       booking_id: bookingId,
       user_phone: phone,
       amount: 0,
-      status: 'pending_confirmation',
+      status: 'pending',
       provider: 'user_confirmed',
       raw_payload: JSON.stringify(req.body)
     };
@@ -1791,7 +1797,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
             bookingId: bookingId,
             table: table,
             seat: seat,
-            status: 'pending_confirmation',
+            status: 'pending',
             firstName: studentName.split(' ')[0] || studentName,
             lastName: studentName.split(' ')[1] || ''
           },
@@ -1802,7 +1808,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
         const seatId = `${table}-${seat}`;
         io.emit('update-seat-status', {
           seatId: seatId,
-          status: 'pending_confirmation',
+          status: 'pending',
           timestamp: Date.now()
         });
 
@@ -1819,7 +1825,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
       success: true,
       message: 'Оплата подтверждена. Ожидайте подтверждения администратора.',
       bookingId: bookingId,
-      status: 'pending_confirmation'
+      status: 'pending'
     });
 
   } catch (err) {
@@ -1874,8 +1880,8 @@ app.post('/api/confirm-payment', async (req, res) => {
       return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
     }
 
-    if (booking.status !== 'pending_confirmation') {
-      console.log('ConfirmPayment: booking not in pending_confirmation status', booking.status);
+    if (booking.status !== 'pending') {
+      console.log('ConfirmPayment: booking not in pending status', booking.status);
       return res.status(400).json({ error: 'Бронирование не ожидает подтверждения', currentStatus: booking.status });
     }
 
@@ -2716,7 +2722,7 @@ app.get('/api/seat-statuses', async (req, res) => {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
-                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
+                } else if (booking.status === 'pending') {
                     status = 'pending';
                 }
                 
