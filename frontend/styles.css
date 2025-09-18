@@ -213,7 +213,7 @@ body {
 
 .table-area {
     position: absolute;
-    border: 2px solid transparent;
+    border: 2px solid #667eea;
     border-radius: 50%;
     cursor: pointer;
     pointer-events: all;
@@ -223,12 +223,14 @@ body {
     justify-content: center;
     font-weight: bold;
     font-size: 0.8rem;
-    color: #333;
-    background: rgba(255, 255, 255, 0.8);
+    color: transparent; /* Hide text content */
+    background: rgba(102, 126, 234, 0.1);
     backdrop-filter: blur(2px);
     min-width: 30px;
     min-height: 30px;
     z-index: 10;
+    /* Add subtle shadow to make areas more visible */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .table-area:hover {
@@ -238,22 +240,7 @@ body {
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.table-area.selected {
-    border-color: #667eea;
-    background: rgba(102, 126, 234, 0.3);
-    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
-}
-
-.table-area.booked {
-    background: rgba(255, 0, 0, 0.2);
-    border-color: #ff4444;
-    cursor: not-allowed;
-}
-
-.table-area.booked:hover {
-    transform: none;
-    box-shadow: none;
-}
+/* Removed .table-area.selected and .table-area.booked styles to prevent overlays */
 
 .seating-plan-caption {
     font-size: 0.9rem;
@@ -936,6 +923,8 @@ body {
         min-width: 25px;
         min-height: 25px;
         font-size: 0.7rem;
+        color: transparent; /* Hide text content on mobile too */
+        border-width: 1px; /* Thinner border on mobile */
     }
     
     .interactive-seating-plan {
@@ -987,5 +976,66 @@ body {
     .header-info {
         flex-direction: column;
         gap: 0.5rem;
+    }
+}
+
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    text-align: center;
+}
+
+/* Error and Success Messages */
+
+/* Payment Error Styles */
+#paymentError {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ff4444;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+    z-index: 10000;
+    max-width: 400px;
+    animation: slideInRight 0.3s ease-out;
+}
+
+#paymentError .error-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#paymentError .error-message {
+    flex: 1;
+    font-weight: 500;
+}
+
+#paymentError .retry-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#paymentError .retry-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
     }
 }

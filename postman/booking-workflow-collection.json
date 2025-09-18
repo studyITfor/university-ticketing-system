@@ -1,0 +1,94 @@
+{
+  "info": {
+    "name": "Booking Workflow API Tests",
+    "description": "Collection for testing the booking workflow with admin confirmation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Booking",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"phone\": \"+1234567890\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"whatsappOptin\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/create-booking",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "create-booking"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Admin Confirm Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 1,\n  \"adminId\": \"admin\",\n  \"adminNotes\": \"Payment confirmed by admin\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/confirm-payment",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "admin", "confirm-payment"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Bookings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/bookings",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Log Client Error",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"errorType\": \"test_error\",\n  \"message\": \"Test error message\",\n  \"stack\": \"Test stack trace\",\n  \"url\": \"http://localhost:3000\",\n  \"userAgent\": \"Test User Agent\",\n  \"timestamp\": \"2025-01-17T10:00:00.000Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/log-client-error",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "log-client-error"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    }
+  ]
+}

@@ -13,6 +13,9 @@ const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
+const WhatsAppService = require('./whatsapp-service');
+const DatabaseService = require('./database-service');
+const GreenAPIService = require('./greenapi-service');
 
 const app = express();
 const server = createServer(app);
@@ -34,6 +37,32 @@ const io = new Server(server, {
 app.set('io', io);
 
 const PORT = process.env.PORT || config.server.port || 3000;
+
+// Initialize services
+const whatsappService = new WhatsAppService();
+const databaseService = new DatabaseService();
+
+// Utility functions
+function validateE164Phone(phone) {
+  const e164Regex = /^\+[1-9]\d{1,14}$/;
+  return e164Regex.test(phone);
+}
+
+function normalizePhone(phone) {
+  // Remove all non-digit characters except +
+  let normalized = phone.replace(/[^\d+]/g, '');
+  
+  // If it doesn't start with +, add it
+  if (!normalized.startsWith('+')) {
+    normalized = '+' + normalized;
+  }
+  
+  return normalized;
+}
+
+function generateConfirmationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // Middleware
 app.use(cors());
@@ -304,31 +333,7 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
-// Get all bookings for admin panel
-app.get('/api/bookings', async (req, res) => {
-    try {
-        console.log('🔍 Admin requesting all bookings...');
-        
-        const result = await db.query(`
-            SELECT b.*, u.phone 
-            FROM bookings b 
-            LEFT JOIN users u ON b.user_phone = u.phone 
-            ORDER BY b.created_at DESC
-        `);
-        
-        console.log(`✅ Found ${result.rows.length} bookings for admin`);
-        
-        res.json(result.rows);
-        
-    } catch (error) {
-        console.error('❌ Error fetching bookings:', error);
-        res.status(500).json({
-            status: 'error',
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
+// Get all bookings for admin panel - moved to line 1780 to avoid duplication
 
 // Delete booking endpoint
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
@@ -680,6 +685,13 @@ io.on('connection', (socket) => {
     // Handle client pings
     socket.on('ping', () => {
         socket.emit('pong', { timestamp: Date.now() });
+    });
+    
+    // Handle booking status updates (for real-time updates)
+    socket.on('booking.updated', (data) => {
+        console.log('📡 Booking update event received:', data);
+        // Broadcast to all clients
+        socket.broadcast.emit('booking.updated', data);
     });
     
     // Handle booking creation events (broadcast to all admins)
@@ -1338,17 +1350,33 @@ app.post('/api/create-booking', async (req, res) => {
             return res.status(400).json({ error: 'Seat already booked' });
         }
         
-        // Create or update user
-        await db.query(
-            'INSERT INTO users (phone, role) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
-            [bookingData.phone, 'user']
-        );
+        // Create booking using database service with transaction support
+        const { booking, user } = await databaseService.createBooking({
+            bookingId,
+            phone: bookingData.phone,
+            firstName: bookingData.firstName,
+            lastName: bookingData.lastName,
+            table: bookingData.table,
+            seat: bookingData.seat,
+            eventId: 1,
+            price: 5500.00,
+            whatsappOptin: bookingData.whatsappOptin || false,
+            confirmationCode: bookingData.confirmationCode,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+            source: 'web'
+        });
         
-        // Save booking to database with pending status (requires manual admin confirmation)
-        const result = await db.query(
-            'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            [bookingId, bookingData.phone, 1, `${bookingData.table}-${bookingData.seat}`, bookingData.table, bookingData.seat, bookingData.firstName, bookingData.lastName, 'pending']
-        );
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: booking.id,
+            tableId: bookingData.table,
+            seatId: `${bookingData.table}-${bookingData.seat}`,
+            newStatus: 'selected',
+            booking: booking,
+            timestamp: Date.now()
+        });
         
         // Emit booking created event to all admins
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1392,6 +1420,269 @@ app.post('/api/create-booking', async (req, res) => {
         console.error('❌ Error stack:', error.stack);
         console.error('❌ Booking data that failed:', bookingData);
         res.status(500).json({ error: 'Ошибка при создании бронирования' });
+    }
+});
+
+// Send confirmation code endpoint
+app.post('/api/send-confirmation-code', async (req, res) => {
+    const { phone, name, bookingId } = req.body;
+    
+    console.log('📱 Send confirmation code request:', { 
+        phone: phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : 'N/A',
+        name: name || 'N/A',
+        bookingId: bookingId || 'N/A',
+        timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!phone) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Phone number is required',
+            code: 'MISSING_PHONE'
+        });
+    }
+
+    if (!name) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Name is required',
+            code: 'MISSING_NAME'
+        });
+    }
+
+    // Validate phone format
+    if (!validateE164Phone(phone)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid phone format. Please use E.164 format (+[country code][number])',
+            code: 'INVALID_PHONE_FORMAT'
+        });
+    }
+
+    try {
+        // Generate confirmation code
+        const confirmationCode = generateConfirmationCode();
+        
+        // Create confirmation message
+        const message = `🎫 *GOLDENMIDDLE EVENT* 🎫
+
+Привет, ${name}! 👋
+
+Ваш код подтверждения: *${confirmationCode}*
+
+Используйте этот код для подтверждения бронирования.
+
+С уважением,
+Команда GOLDENMIDDLE`;
+
+        console.log(`📤 Sending confirmation code to ${phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}`);
+
+        // Send via WhatsApp service (Green API)
+        const sendResult = await whatsappService.sendMessage(phone, message);
+
+        if (sendResult.success) {
+            console.log('✅ Confirmation code sent successfully:', {
+                messageId: sendResult.messageId,
+                phone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+                provider: sendResult.provider
+            });
+
+            // Store confirmation code in database if bookingId provided
+            if (bookingId) {
+                try {
+                    const updateSql = `UPDATE bookings SET confirmation_code = $1, confirmation_sent_at = NOW() WHERE booking_string_id = $2 OR id::text = $2`;
+                    await db.query(updateSql, [confirmationCode, bookingId]);
+                    console.log('💾 Confirmation code stored in database for booking:', bookingId);
+                } catch (dbError) {
+                    console.warn('⚠️ Failed to store confirmation code in database:', dbError.message);
+                    // Don't fail the request if DB update fails
+                }
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Confirmation code sent successfully',
+                phone: phone,
+                confirmationCode: confirmationCode, // Include for development/testing
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+        } else {
+            console.error('❌ Failed to send confirmation code:', sendResult.error);
+            
+            // Return appropriate error based on the failure type
+            if (sendResult.code === 'PROVIDER_NOT_CONFIGURED') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service is temporarily unavailable',
+                    code: 'WHATSAPP_SERVICE_UNAVAILABLE',
+                    details: 'Service configuration issue'
+                });
+            }
+
+            if (sendResult.code === 'RATE_LIMIT') {
+                return res.status(429).json({
+                    success: false,
+                    error: 'Too many requests. Please try again later',
+                    code: 'RATE_LIMIT',
+                    details: 'Rate limit exceeded'
+                });
+            }
+
+            if (sendResult.code === 'AUTH_ERROR') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service authentication failed',
+                    code: 'AUTH_ERROR',
+                    details: 'Invalid credentials'
+                });
+            }
+
+            // Generic error
+            return res.status(502).json({
+                success: false,
+                error: 'Failed to send confirmation code',
+                code: 'SEND_FAILED',
+                details: sendResult.error,
+                provider: sendResult.provider
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Confirmation code endpoint error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+            details: error.message
+        });
+    }
+});
+
+// WhatsApp Opt-in endpoint
+app.post('/api/optin', async (req, res) => {
+    const { name, surname, phone, optin_source, booking_id } = req.body;
+    
+    console.log('📱 WhatsApp opt-in request:', { 
+        name: name || 'N/A',
+        surname: surname || 'N/A',
+        phone: phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : 'N/A',
+        optin_source: optin_source || 'N/A',
+        booking_id: booking_id || 'N/A',
+        timestamp: new Date().toISOString()
+    });
+
+    // Validate required fields
+    if (!name || !surname || !phone) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Name, surname, and phone are required',
+            code: 'MISSING_REQUIRED_FIELDS'
+        });
+    }
+
+    // Validate phone format
+    if (!validateE164Phone(phone)) {
+        return res.status(400).json({ 
+            success: false,
+            error: 'Invalid phone format. Please use E.164 format (+[country code][number])',
+            code: 'INVALID_PHONE_FORMAT'
+        });
+    }
+
+    try {
+        // Generate confirmation code
+        const confirmationCode = generateConfirmationCode();
+        const fullName = `${name} ${surname}`;
+        
+        // Send confirmation code via Green API
+        const sendResult = await whatsappService.sendConfirmationCode(phone, confirmationCode, fullName);
+        
+        if (sendResult.success) {
+            console.log('✅ WhatsApp opt-in successful:', {
+                phone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+
+            // Store opt-in in database
+            try {
+                const insertSql = `
+                    INSERT INTO opt_ins (name, surname, phone, optin_source, confirmation_code, booking_id, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (phone) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        surname = EXCLUDED.surname,
+                        optin_source = EXCLUDED.optin_source,
+                        confirmation_code = EXCLUDED.confirmation_code,
+                        booking_id = EXCLUDED.booking_id,
+                        updated_at = NOW()
+                `;
+                await db.query(insertSql, [name, surname, phone, optin_source, confirmationCode, booking_id]);
+                console.log('💾 Opt-in stored in database');
+            } catch (dbError) {
+                console.warn('⚠️ Failed to store opt-in in database:', dbError.message);
+                // Don't fail the request if DB update fails
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Confirmation code sent successfully',
+                phone: phone,
+                confirmationCode: confirmationCode, // Include for development/testing
+                messageId: sendResult.messageId,
+                provider: sendResult.provider
+            });
+        } else {
+            console.error('❌ WhatsApp opt-in failed:', sendResult.error);
+            
+            // Return appropriate error based on the failure type
+            if (sendResult.code === 'INVALID_PHONE_FORMAT') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid phone format',
+                    code: 'INVALID_PHONE_FORMAT',
+                    details: sendResult.error
+                });
+            }
+
+            if (sendResult.code === 'quota_exceeded' || sendResult.code === 'rate_limit') {
+                return res.status(429).json({
+                    success: false,
+                    error: 'Too many requests. Please try again later',
+                    code: 'RATE_LIMIT',
+                    details: 'Rate limit exceeded'
+                });
+            }
+
+            if (sendResult.code === 'auth_error' || sendResult.code === 'unauthorized') {
+                return res.status(503).json({
+                    success: false,
+                    error: 'WhatsApp service authentication failed',
+                    code: 'AUTH_ERROR',
+                    details: 'Invalid credentials'
+                });
+            }
+
+            // Generic error
+            return res.status(502).json({
+                success: false,
+                error: 'Failed to send confirmation code',
+                code: 'SEND_FAILED',
+                details: sendResult.error,
+                provider: sendResult.provider
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Opt-in endpoint error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            code: 'INTERNAL_ERROR',
+            details: error.message
+        });
     }
 });
 
@@ -1728,8 +2019,7 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 // Get bookings
 app.get('/api/bookings', async (req, res) => {
     try {
-        const result = await db.query('SELECT * FROM bookings ORDER BY created_at DESC');
-        const bookings = result.rows;
+        const bookings = await databaseService.getAllBookings();
         
         // Convert to the format expected by frontend
         const formattedBookings = {};
@@ -2061,6 +2351,69 @@ app.post('/api/payments/:transaction_id/confirm', async (req, res) => {
         res.status(500).json({ error: 'Error confirming payment' });
     }
 });
+
+
+// WhatsApp webhook endpoint - handle incoming messages (STOP, etc.)
+app.post('/webhook/whatsapp-inbound', async (req, res) => {
+  try {
+    let phone, body;
+    
+    // Handle Green API webhook format
+    if (req.body.senderData) {
+      // Green API format
+      phone = req.body.senderData.sender.replace('@c.us', '');
+      body = req.body.messageData.textMessageData?.textMessage || '';
+    } else {
+      return res.status(400).json({ error: 'Invalid webhook format' });
+    }
+    
+    const result = await whatsappService.handleIncomingMessage(phone, body);
+    
+    res.json({
+      success: true,
+      action: result.action
+    });
+    
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message 
+    });
+  }
+});
+
+// Send ticket if user is confirmed (internal function)
+async function sendTicketIfConfirmed(phone, ticketUrl, bookingDetails) {
+  try {
+    // Check if user is confirmed and not unsubscribed
+    const result = await db.query(`
+      SELECT confirmed, unsubscribed FROM opt_ins 
+      WHERE phone = $1
+    `, [phone]);
+    
+    if (result.rows.length === 0 || !result.rows[0].confirmed || result.rows[0].unsubscribed) {
+      console.log(`User ${phone} not confirmed or unsubscribed, skipping ticket send`);
+      return { success: false, reason: 'not_confirmed_or_unsubscribed' };
+    }
+    
+    // Send ticket
+    const sendResult = await whatsappService.sendTicket(phone, ticketUrl, bookingDetails);
+    
+    if (sendResult.success) {
+      // Update last_sent_at
+      await db.query(`
+        UPDATE opt_ins SET last_sent_at = now() WHERE phone = $1
+      `, [phone]);
+    }
+    
+    return sendResult;
+    
+  } catch (error) {
+    console.error('Send ticket error:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 // ===== ADMIN FEATURES =====
 
@@ -2469,6 +2822,133 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
             error: 'Failed to check ticket existence',
             details: error.message 
         });
+    }
+});
+
+// Mark booking as paid by client (student "I paid" button)
+app.post('/api/book/mark-paid', async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        
+        if (!bookingId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Booking ID is required' 
+            });
+        }
+        
+        console.log(`💳 Student marking booking as paid: ${bookingId}`);
+        
+        // Update booking status using database service
+        const updatedBooking = await databaseService.updateBookingStatus(bookingId, 'awaiting_confirmation', {
+            adminId: 'student',
+            adminNotes: 'Marked as paid by client',
+            adminUserId: null,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+        
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: bookingId,
+            tableId: updatedBooking.table_number,
+            seatId: `${updatedBooking.table_number}-${updatedBooking.seat_number}`,
+            newStatus: 'awaiting_confirmation',
+            booking: updatedBooking,
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Booking ${bookingId} marked as paid by client`);
+        
+        res.json({
+            success: true,
+            message: 'Payment marked successfully',
+            status: 'awaiting_confirmation',
+            booking: updatedBooking
+        });
+        
+    } catch (error) {
+        console.error('❌ Error marking payment:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to mark payment' 
+        });
+    }
+});
+
+// Admin payment confirmation endpoint
+app.post('/api/admin/confirm-payment', async (req, res) => {
+    try {
+        const { bookingId, adminId, adminNotes } = req.body;
+        
+        if (!bookingId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Booking ID is required' 
+            });
+        }
+        
+        // Update booking status using database service
+        const updatedBooking = await databaseService.updateBookingStatus(bookingId, 'booked_paid', {
+            adminId: adminId || 'admin',
+            adminNotes: adminNotes || '',
+            adminUserId: null, // Could be enhanced to track admin user ID
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent')
+        });
+        
+        // Emit real-time update to all clients
+        io.emit('booking.updated', {
+            type: 'booking.updated',
+            bookingId: bookingId,
+            tableId: updatedBooking.table_number,
+            seatId: `${updatedBooking.table_number}-${updatedBooking.seat_number}`,
+            newStatus: 'booked_paid',
+            booking: updatedBooking,
+            timestamp: Date.now()
+        });
+        
+        console.log(`✅ Admin confirmed payment for booking ${bookingId}`);
+        
+        res.json({
+            success: true,
+            message: 'Payment confirmed successfully',
+            booking: updatedBooking
+        });
+        
+    } catch (error) {
+        console.error('❌ Error confirming payment:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to confirm payment' 
+        });
+    }
+});
+
+// Log client errors
+app.post('/api/log-client-error', async (req, res) => {
+    try {
+        const { errorType, message, stack, url, userAgent, timestamp } = req.body;
+        
+        console.log('🚨 Client Error Logged:', {
+            errorType,
+            message,
+            url,
+            timestamp,
+            userAgent: userAgent ? userAgent.substring(0, 100) + '...' : 'Unknown'
+        });
+        
+        // In a production environment, you might want to save this to a database
+        // For now, we'll just log it to the console
+        if (stack) {
+            console.log('Stack trace:', stack);
+        }
+        
+        res.json({ success: true, message: 'Error logged successfully' });
+    } catch (error) {
+        console.error('Failed to log client error:', error);
+        res.status(500).json({ success: false, error: 'Failed to log error' });
     }
 });
 

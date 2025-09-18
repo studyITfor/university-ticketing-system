@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "Green API Integration Tests",
+    "description": "Test collection for Green API WhatsApp confirmation code integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        },
+        "description": "Check if the server is running"
+      }
+    },
+    {
+      "name": "Create Booking",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/create-booking",
+          "host": ["{{base_url}}"],
+          "path": ["api", "create-booking"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"phone\": \"+996555245629\",\n  \"tableId\": \"table-1\",\n  \"whatsappOptin\": true\n}"
+        },
+        "description": "Create a new booking"
+      }
+    },
+    {
+      "name": "Send Confirmation Code",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/send-confirmation-code",
+          "host": ["{{base_url}}"],
+          "path": ["api", "send-confirmation-code"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"+996555245629\",\n  \"name\": \"Test User\",\n  \"bookingId\": \"{{booking_id}}\"\n}"
+        },
+        "description": "Send WhatsApp confirmation code via Green API"
+      }
+    },
+    {
+      "name": "Get Bookings",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["api", "bookings"]
+        },
+        "description": "Get all bookings"
+      }
+    },
+    {
+      "name": "Test Invalid Phone Format",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/send-confirmation-code",
+          "host": ["{{base_url}}"],
+          "path": ["api", "send-confirmation-code"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"996555245629\",\n  \"name\": \"Test User\"\n}"
+        },
+        "description": "Test with invalid phone format (missing +)"
+      }
+    },
+    {
+      "name": "Test Missing Phone",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/send-confirmation-code",
+          "host": ["{{base_url}}"],
+          "path": ["api", "send-confirmation-code"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Test User\"\n}"
+        },
+        "description": "Test with missing phone number"
+      }
+    },
+    {
+      "name": "Test Missing Name",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/send-confirmation-code",
+          "host": ["{{base_url}}"],
+          "path": ["api", "send-confirmation-code"]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"+996555245629\"\n}"
+        },
+        "description": "Test with missing name"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    }
+  ]
+}

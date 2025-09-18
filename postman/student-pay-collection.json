@@ -1,0 +1,164 @@
+{
+  "info": {
+    "name": "Student Pay Flow API Tests",
+    "description": "Collection for testing the student booking and payment flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Booking (Selected Status)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"phone\": \"+1234567890\",\n  \"table\": 1,\n  \"seat\": 1,\n  \"whatsappOptin\": true,\n  \"consentText\": \"I agree to receive notifications\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/book",
+          "host": ["{{base_url}}"],
+          "path": ["api", "book"]
+        },
+        "description": "Create a new booking with 'selected' status"
+      },
+      "response": []
+    },
+    {
+      "name": "Mark Booking as Paid",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{booking_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/book/mark-paid",
+          "host": ["{{base_url}}"],
+          "path": ["api", "book", "mark-paid"]
+        },
+        "description": "Mark a booking as paid by client (student 'I paid' button)"
+      },
+      "response": []
+    },
+    {
+      "name": "Admin Confirm Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{booking_id}}\",\n  \"adminId\": \"testAdmin\",\n  \"adminNotes\": \"Confirmed via Postman test\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/confirm-payment",
+          "host": ["{{base_url}}"],
+          "path": ["api", "admin", "confirm-payment"]
+        },
+        "description": "Admin confirms payment and moves booking to 'booked_paid' status"
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Bookings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["api", "bookings"]
+        },
+        "description": "Get all bookings for admin panel"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Booking by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/bookings/{{booking_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "bookings", "{{booking_id}}"]
+        },
+        "description": "Get specific booking by ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Mark Paid - Invalid Booking ID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"INVALID_ID\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/book/mark-paid",
+          "host": ["{{base_url}}"],
+          "path": ["api", "book", "mark-paid"]
+        },
+        "description": "Test error handling for invalid booking ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Mark Paid - Missing Booking ID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/book/mark-paid",
+          "host": ["{{base_url}}"],
+          "path": ["api", "book", "mark-paid"]
+        },
+        "description": "Test error handling for missing booking ID"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "description": "Base URL for the API"
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "description": "Booking ID from create booking response"
+    }
+  ]
+}
