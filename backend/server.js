@@ -48,6 +48,7 @@ async function sendWhatsAppWithRetry(phone, ticket, maxRetries = 1) {
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
       console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone}`);
+      console.log('Green API payload:', { chatId, ticketId: ticket?.ticketId, timestamp: new Date().toISOString() });
       
       // First send text message
       const textMessage = `🎫 *TICKET CONFIRMED* 🎫
@@ -67,9 +68,9 @@ Thank you for your booking! 🎓`;
       const textResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendMessage/${API_TOKEN}`, {
         chatId: chatId,
         message: textMessage
-      });
+      }, { timeout: 15000 });
 
-      console.log('✅ Text message sent via Green API:', textResponse.data);
+      console.log('Green API response status:', textResponse.status, 'body:', textResponse.data);
 
       // Then send file if available
       if (ticket && ticket.path) {
@@ -84,9 +85,9 @@ Thank you for your booking! 🎓`;
         
         console.log('📱 Green API file payload:', filePayload);
         
-        const fileResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendFileByUrl/${API_TOKEN}`, filePayload);
+        const fileResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendFileByUrl/${API_TOKEN}`, filePayload, { timeout: 15000 });
         
-        console.log('✅ PDF file sent via Green API sendFileByUrl:', fileResponse.data);
+        console.log('Green API file response status:', fileResponse.status, 'body:', fileResponse.data);
         
         return {
           success: true,
@@ -106,6 +107,12 @@ Thank you for your booking! 🎓`;
       
     } catch (error) {
       console.error(`❌ Green API attempt ${attempt} failed:`, error.message);
+      console.error('Green API error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
       
       if (attempt === maxRetries + 1) {
         // Final attempt failed
@@ -116,8 +123,10 @@ Thank you for your booking! 🎓`;
         };
       }
       
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait before retry with exponential backoff
+      const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+      console.log(`📱 Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
@@ -1989,8 +1998,8 @@ app.post('/api/confirm-payment', async (req, res) => {
         } else {
           // Green API failed - set status to confirmation_failed
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
-          await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
-            ['confirmation_failed', 'FAILED-' + Date.now(), updatedBooking.id]);
+          await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, confirmation_error = $3, updated_at = now() WHERE id=$4', 
+            ['confirmation_failed', 'FAILED-' + Date.now(), whatsappResult.error, updatedBooking.id]);
           console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
           
           // Return error to admin UI
