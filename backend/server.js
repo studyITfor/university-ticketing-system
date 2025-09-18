@@ -173,6 +173,52 @@ app.get('/api/health/readiness', async (req, res) => {
     }
 });
 
+// Green API health check
+app.get('/api/health/greenapi', async (req, res) => {
+    try {
+        console.log('🔍 Checking Green API health...');
+        
+        if (!GREEN_API_BASE || !ID_INSTANCE || !API_TOKEN) {
+            return res.status(503).json({ 
+                status: 'not configured', 
+                greenapi: false, 
+                error: 'Green API credentials not configured' 
+            });
+        }
+        
+        // Call Green API getStateInstance
+        const response = await axios.get(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/getStateInstance/${API_TOKEN}`, {
+            timeout: 10000
+        });
+        
+        console.log('Green API health response:', response.data);
+        
+        if (response.status === 200) {
+            return res.json({ 
+                status: 'ok', 
+                greenapi: true, 
+                state: response.data.stateInstance,
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            return res.status(503).json({ 
+                status: 'error', 
+                greenapi: false, 
+                error: `Green API returned status ${response.status}`,
+                response: response.data
+            });
+        }
+    } catch (error) {
+        console.error('Green API health check error:', error.message);
+        return res.status(503).json({ 
+            status: 'error', 
+            greenapi: false, 
+            error: error.message,
+            details: error.response?.data
+        });
+    }
+});
+
 // Ensure tickets directory exists
 const ticketsDir = path.join(__dirname, 'tickets');
 fs.ensureDirSync(ticketsDir);
