@@ -1880,8 +1880,8 @@ Socket.IO Diagnostics:
             status = 'Ожидает подтверждения';
             message = 'Awaiting confirmation';
         } else if (seatStatus === 'pending') {
-            status = 'Ожидает оплаты';
-            message = 'Это место недоступно для бронирования.';
+            status = 'Ожидает подтверждения';
+            message = 'Awaiting confirmation';
         } else if (classList.contains('paid')) {
             status = 'Забронировано (оплачено)';
             message = 'This seat is not available for booking.';
