@@ -1932,10 +1932,10 @@ app.post('/api/confirm-payment', async (req, res) => {
       console.log('✅ Ticket generated successfully:', ticket);
       
       // Upload ticket to external storage
-      if (ticket && ticket.path) {
+      if (ticket && ticket.localPath) {
         console.log('📤 Uploading ticket to external storage...');
-        const fileName = path.basename(ticket.path);
-        const uploadResult = await uploadTicketToStorage(ticket.path, fileName);
+        const fileName = path.basename(ticket.localPath);
+        const uploadResult = await uploadTicketToStorage(ticket.localPath, fileName);
         
         if (uploadResult.success) {
           publicTicketUrl = uploadResult.publicUrl;
@@ -1944,6 +1944,12 @@ app.post('/api/confirm-payment', async (req, res) => {
           // Update booking with public ticket URL
           await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
             [publicTicketUrl, updatedBooking.id]);
+          
+          // Remove temporary file after successful upload
+          if (ticket.isTemp && fs.existsSync(ticket.localPath)) {
+            fs.unlinkSync(ticket.localPath);
+            console.log('🗑️ Temporary ticket file removed:', ticket.localPath);
+          }
         } else {
           console.error('❌ Failed to upload ticket to external storage:', uploadResult.error);
           // Fallback to local URL

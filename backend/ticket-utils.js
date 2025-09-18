@@ -13,11 +13,11 @@ const TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
 
 // Generate ticket file (PDF)
 async function generateTicketForBooking(booking) {
-  const ticketsDir = path.resolve(__dirname, '..', 'tickets');
-  if (!fs.existsSync(ticketsDir)) fs.mkdirSync(ticketsDir, { recursive: true });
+  const os = require('os');
+  const tempDir = os.tmpdir();
   const ticketId = booking.ticket_id || ('T' + Date.now().toString(36).toUpperCase());
   const filename = `${ticketId}.pdf`;
-  const filepath = path.join(ticketsDir, filename);
+  const filepath = path.join(tempDir, filename);
 
   // Create PDF ticket if not exists
   if (!fs.existsSync(filepath)) {
@@ -74,11 +74,11 @@ async function generateTicketForBooking(booking) {
         `Thank you for your booking! 🎓`
       ];
       fs.writeFileSync(txtFilepath, contentLines.join('\n'), 'utf8');
-      return { ticketId, path: `/tickets/${txtFilename}`, localPath: txtFilepath };
+      return { ticketId, path: `/tickets/${txtFilename}`, localPath: txtFilepath, isTemp: true };
     }
   }
 
-  return { ticketId, path: `/tickets/${filename}`, localPath: filepath };
+  return { ticketId, path: `/tickets/${filename}`, localPath: filepath, isTemp: true };
 }
 
 // Generate HTML content for PDF ticket matching the provided design
