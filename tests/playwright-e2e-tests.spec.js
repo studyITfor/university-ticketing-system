@@ -146,16 +146,16 @@ test.describe('Admin Panel Tests', () => {
     await expect(page.locator('#bookingsTable')).toBeVisible();
   });
 
-  test('should show updated status text in English', async ({ page }) => {
-    // Check if status text is in English
-    await expect(page.locator('body')).toContainText('Pending Payment');
-    await expect(page.locator('body')).toContainText('Paid');
-    await expect(page.locator('body')).toContainText('Booked');
+  test('should show updated status text in Russian', async ({ page }) => {
+    // Check if status text is in Russian
+    await expect(page.locator('body')).toContainText('Ожидают оплаты');
+    await expect(page.locator('body')).toContainText('Оплачено');
+    await expect(page.locator('body')).toContainText('Забронировано');
   });
 
   test('should show admin action buttons', async ({ page }) => {
     // Check if admin action buttons are present
-    await expect(page.locator('button:has-text("Confirm Payment")')).toBeVisible();
-    await expect(page.locator('button:has-text("Delete")')).toBeVisible();
+    await expect(page.locator('button:has-text("Подтвердить оплату")')).toBeVisible();
+    await expect(page.locator('button:has-text("Удалить")')).toBeVisible();
   });
 });
