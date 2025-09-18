@@ -4,10 +4,12 @@ const path = require('path');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
 
-const GREEN_API_URL = process.env.GREEN_API_URL;
+const config = require('./config');
+
+const GREEN_API_URL = process.env.GREEN_API_URL || config.whatsapp.apiUrl;
 const GREEN_API_MEDIA_URL = process.env.GREEN_API_MEDIA_URL;
-const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE;
-const TOKEN = process.env.GREEN_API_TOKEN;
+const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || config.whatsapp.id;
+const TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
 
 // Generate ticket file (PDF)
 async function generateTicketForBooking(booking) {

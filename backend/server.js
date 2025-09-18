@@ -55,6 +55,9 @@ app.get('/admin.html', (req, res) => {
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Serve tickets directory statically
+app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
+
 // Health check endpoints
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -196,7 +199,7 @@ async function emitSeatUpdate() {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed') {
                     status = 'reserved';
-                } else if (booking.status === 'pending') {
+                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
                     status = 'pending';
                 } else if (booking.status === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
@@ -754,7 +757,7 @@ function emitSeatBulkUpdate() {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
-                } else if (booking.status === 'pending') {
+                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
                     status = 'pending';
                 } else if (booking.status === 'prebooked') {
                     status = 'paid'; // Pre-booked seats appear as "Booked (Paid)" for students
@@ -1621,14 +1624,11 @@ app.post('/api/resend-ticket', async (req, res) => {
 
 // User payment confirmation endpoint - for "Я оплатил" button
 app.post('/api/user-payment-confirm', async (req, res) => {
-  const { seatId, studentName, phone, email, whatsapp, paymentMethod } = req.body;
+  const { seatId, studentName, phone } = req.body;
   console.log('💳 User payment confirmation request:', {
     seatId,
     studentName,
     phone,
-    email,
-    whatsapp,
-    paymentMethod,
     timestamp: new Date().toISOString()
   });
 
@@ -1665,10 +1665,10 @@ app.post('/api/user-payment-confirm', async (req, res) => {
     // Start transaction
     await db.query('BEGIN');
 
-    // Create booking with 'pending' status (waiting for admin confirmation)
+    // Create booking with 'pending_confirmation' status (waiting for admin confirmation)
     const result = await db.query(
       'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending']
+      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending_confirmation']
     );
 
     const booking = result.rows[0];
@@ -1679,8 +1679,8 @@ app.post('/api/user-payment-confirm', async (req, res) => {
       booking_id: bookingId,
       user_phone: phone,
       amount: 0,
-      status: 'confirmed',
-      provider: paymentMethod || 'user_confirmed',
+      status: 'pending_confirmation',
+      provider: 'user_confirmed',
       raw_payload: JSON.stringify(req.body)
     };
 
@@ -1704,7 +1704,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
             bookingId: bookingId,
             table: table,
             seat: seat,
-            status: 'pending',
+            status: 'pending_confirmation',
             firstName: studentName.split(' ')[0] || studentName,
             lastName: studentName.split(' ')[1] || ''
           },
@@ -1715,7 +1715,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
         const seatId = `${table}-${seat}`;
         io.emit('update-seat-status', {
           seatId: seatId,
-          status: 'pending',
+          status: 'pending_confirmation',
           timestamp: Date.now()
         });
 
@@ -1732,7 +1732,7 @@ app.post('/api/user-payment-confirm', async (req, res) => {
       success: true,
       message: 'Оплата подтверждена. Ожидайте подтверждения администратора.',
       bookingId: bookingId,
-      status: 'pending'
+      status: 'pending_confirmation'
     });
 
   } catch (err) {
@@ -1785,6 +1785,11 @@ app.post('/api/confirm-payment', async (req, res) => {
     if (booking.status === 'paid' || booking.status === 'confirmed') {
       console.log('ConfirmPayment: idempotent - already paid', booking.booking_string_id || booking.id);
       return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
+    }
+
+    if (booking.status !== 'pending_confirmation') {
+      console.log('ConfirmPayment: booking not in pending_confirmation status', booking.status);
+      return res.status(400).json({ error: 'Бронирование не ожидает подтверждения', currentStatus: booking.status });
     }
 
     console.log('💳 Starting payment transaction...');
@@ -2585,7 +2590,7 @@ app.get('/api/seat-statuses', async (req, res) => {
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
                     status = 'reserved';
-                } else if (booking.status === 'pending') {
+                } else if (booking.status === 'pending' || booking.status === 'pending_confirmation') {
                     status = 'pending';
                 }
                 
