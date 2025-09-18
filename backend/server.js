@@ -13,6 +13,7 @@ const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
+const { uploadTicketToStorage } = require('./storage-utils');
 
 const app = express();
 const server = createServer(app);
@@ -34,6 +35,92 @@ const io = new Server(server, {
 app.set('io', io);
 
 const PORT = process.env.PORT || config.server.port || 3000;
+
+// Green API configuration
+const GREEN_API_BASE = process.env.GREEN_API_BASE || config.whatsapp.apiUrl;
+const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || config.whatsapp.id;
+const API_TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
+
+// Green API retry function
+async function sendWhatsAppWithRetry(phone, ticket, maxRetries = 1) {
+  const chatId = phone + '@c.us';
+  
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone}`);
+      
+      // First send text message
+      const textMessage = `🎫 *TICKET CONFIRMED* 🎫
+
+*Ticket ID:* ${ticket?.ticketId || 'N/A'}
+*Event:* University Event
+*Date:* ${new Date().toLocaleDateString('ru-RU')}
+*Time:* ${new Date().toLocaleTimeString('ru-RU')}
+
+*Status:* ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓`;
+
+      const textResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendMessage/${API_TOKEN}`, {
+        chatId: chatId,
+        message: textMessage
+      });
+
+      console.log('✅ Text message sent via Green API:', textResponse.data);
+
+      // Then send file if available
+      if (ticket && ticket.path) {
+        console.log('📎 Sending PDF ticket file via Green API sendFileByUrl...');
+        
+        const filePayload = {
+          chatId: chatId,
+          urlFile: ticket.path,
+          fileName: `ticket_${ticket.ticketId}.pdf`,
+          caption: `🎫 Ваш билет подтвержден!\n\nID билета: ${ticket.ticketId}\n\nБилет прикреплен к сообщению. Пожалуйста, сохраните его для входа на мероприятие.`
+        };
+        
+        console.log('📱 Green API file payload:', filePayload);
+        
+        const fileResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendFileByUrl/${API_TOKEN}`, filePayload);
+        
+        console.log('✅ PDF file sent via Green API sendFileByUrl:', fileResponse.data);
+        
+        return {
+          success: true,
+          message: 'WhatsApp ticket sent successfully via Green API',
+          provider: 'Green API',
+          textMessageId: textResponse.data?.idMessage,
+          fileMessageId: fileResponse.data?.idMessage
+        };
+      } else {
+        return {
+          success: true,
+          message: 'WhatsApp text sent successfully via Green API',
+          provider: 'Green API',
+          textMessageId: textResponse.data?.idMessage
+        };
+      }
+      
+    } catch (error) {
+      console.error(`❌ Green API attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries + 1) {
+        // Final attempt failed
+        return {
+          success: false,
+          error: `Green API failed after ${maxRetries + 1} attempts: ${error.message}`,
+          provider: 'Green API'
+        };
+      }
+      
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
 
 // Middleware
 app.use(cors());
@@ -1829,27 +1916,56 @@ app.post('/api/confirm-payment', async (req, res) => {
     await db.query('COMMIT');
     console.log('✅ Payment transaction committed successfully');
 
-    // generate ticket (PDF or text)
+    // generate ticket (PDF or text) and upload to external storage
     let ticket = null;
+    let publicTicketUrl = null;
     try {
       console.log('🎫 Generating ticket for booking:', updatedBooking.id);
       const { generateTicketForBooking } = require('./ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
       console.log('✅ Ticket generated successfully:', ticket);
+      
+      // Upload ticket to external storage
+      if (ticket && ticket.path) {
+        console.log('📤 Uploading ticket to external storage...');
+        const fileName = path.basename(ticket.path);
+        const uploadResult = await uploadTicketToStorage(ticket.path, fileName);
+        
+        if (uploadResult.success) {
+          publicTicketUrl = uploadResult.publicUrl;
+          console.log('✅ Ticket uploaded to external storage:', publicTicketUrl);
+          
+          // Update booking with public ticket URL
+          await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
+            [publicTicketUrl, updatedBooking.id]);
+        } else {
+          console.error('❌ Failed to upload ticket to external storage:', uploadResult.error);
+          // Fallback to local URL
+          publicTicketUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.path}`;
+        }
+      }
     } catch (e) {
       console.error('❌ Ticket generation error:', e);
     }
 
-    // send whatsapp via Green API or simulation
+    // send whatsapp via Green API with retry logic
     let whatsappResult = null;
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
         console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
-        const { sendWhatsAppTicket } = require('./ticket-utils');
-        whatsappResult = await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
+        
+        // Use public ticket URL for Green API
+        const ticketForWhatsApp = ticket ? {
+          ...ticket,
+          path: publicTicketUrl || ticket.path
+        } : { ticketId: null, path: null };
+        
+        // Call Green API with retry logic
+        whatsappResult = await sendWhatsAppWithRetry(phone, ticketForWhatsApp);
         
         if (whatsappResult.success) {
+          // Green API succeeded - update booking to paid
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
             [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, updatedBooking.id]);
           console.log('✅ WhatsApp sent successfully:', {
@@ -1859,13 +1975,19 @@ app.post('/api/confirm-payment', async (req, res) => {
             ticketId: ticket?.ticketId
           });
         } else {
+          // Green API failed - set status to confirmation_failed
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
-          // Still update ticket_id and mark as sent (simulated) even if WhatsApp fails
-          if (ticket?.ticketId) {
-            await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = true, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
-              [ticket.ticketId, 'FAILED-' + Date.now(), updatedBooking.id]);
-            console.log('✅ Ticket ID saved and marked as sent (simulated) despite WhatsApp failure');
-          }
+          await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
+            ['confirmation_failed', 'FAILED-' + Date.now(), updatedBooking.id]);
+          console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
+          
+          // Return error to admin UI
+          return res.status(502).json({ 
+            success: false, 
+            message: 'Failed to send ticket via WhatsApp', 
+            error: whatsappResult.error,
+            bookingId: updatedBooking.booking_string_id || updatedBooking.id
+          });
         }
       } else {
         console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
@@ -1890,10 +2012,14 @@ app.post('/api/confirm-payment', async (req, res) => {
 
     // emit real-time update
     try {
-      console.log('📡 Emitting bookingUpdated event...');
+      console.log('📡 Emitting booking:confirmed event...');
       if (io) {
-        io.emit('bookingUpdated', updatedBooking);
-        console.log('✅ bookingUpdated event emitted successfully');
+        io.emit('booking:confirmed', { 
+          seatId: updatedBooking.seat, 
+          status: 'paid',
+          bookingId: updatedBooking.booking_string_id || updatedBooking.id
+        });
+        console.log('✅ booking:confirmed event emitted successfully');
       } else {
         console.warn('⚠️ Socket.IO not available for real-time updates');
       }

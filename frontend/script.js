@@ -1216,6 +1216,20 @@ class StudentTicketingSystem {
                 this.updateSeatStatusFromSelection(data.seatId, data.status);
             });
             
+            // Handle booking confirmation events
+            this.socket.on('booking:confirmed', (data) => {
+                console.log('🎫 Received booking confirmation:', data);
+                
+                if (data.seatId && data.status === 'paid') {
+                    // Update seat to paid status
+                    this.updateSeatStatus(data.seatId, 'paid');
+                    console.log('✅ Seat updated to paid status:', data.seatId);
+                    
+                    // Show confirmation message
+                    this.showConfirmationMessage('Ваш билет подтвержден и отправлен в WhatsApp!');
+                }
+            });
+            
             this.socket.on('connect_error', (error) => {
                 this.socketStatus.connectionAttempts++;
                 console.error('🚨 Socket.IO connection error:', error);
@@ -1451,6 +1465,46 @@ class StudentTicketingSystem {
                 notification.parentNode.removeChild(notification);
             }
         }, 2000);
+    }
+
+    // Show confirmation message for booking confirmation
+    showConfirmationMessage(message) {
+        console.log('🎫 Showing confirmation message:', message);
+        
+        // Create confirmation notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            max-width: 300px;
+            word-wrap: break-word;
+            border-left: 4px solid #2E7D32;
+        `;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">🎫</span>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
     }
 
     // Show bulk update notification
@@ -1816,12 +1870,21 @@ Socket.IO Diagnostics:
         let message = 'Это место доступно для бронирования.';
         
         // Check data-status first (authoritative from server)
-        if (seatStatus === 'booked' || seatStatus === 'reserved' || seatStatus === 'paid') {
+        if (seatStatus === 'paid') {
+            status = 'Забронировано (оплачено)';
+            message = 'This seat is not available for booking.';
+        } else if (seatStatus === 'booked' || seatStatus === 'reserved') {
             status = 'Забронировано';
             message = 'Это место недоступно для бронирования.';
+        } else if (seatStatus === 'pending_confirmation') {
+            status = 'Ожидает подтверждения';
+            message = 'Awaiting confirmation';
         } else if (seatStatus === 'pending') {
             status = 'Ожидает оплаты';
             message = 'Это место недоступно для бронирования.';
+        } else if (classList.contains('paid')) {
+            status = 'Забронировано (оплачено)';
+            message = 'This seat is not available for booking.';
         } else if (classList.contains('booked') || classList.contains('reserved')) {
             status = 'Забронировано';
             message = 'Это место недоступно для бронирования.';
